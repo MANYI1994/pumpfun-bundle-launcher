@@ -37,6 +37,10 @@ You can send DM if you need advanced tools.
 ### Custom Onchain Program
 - **📂 Onchain Integration:** Seamlessly integrate and operate with our bespoke onchain program.
 
+- Enquiry rG: https://t.me/Carl_Crypt
+
+Discord Community: https://discord.gg/GY98cMUT7j
+
 ### Complex Sell Strategies
 - **💸 Sell Strategies:** Implement complex percentage-based sell strategies across all keypairs simultaneously.
 
