@@ -1,0 +1,35 @@
+{
+  "numOfWallets": 4,
+  "pubkey1": "7gPb94pTWe2K6iByfVtv1z6irGB4JVaiyV3WRpPG2XXB",
+  "pubkey2": "4Aq7Y3odisepFQLynaLnZ7LxxeAJcXuKrjSBn869M9p1",
+  "pubkey3": "4ygs3qUgT2So4S4Rppksi8hUkqKUtKVk1A12rg2cKAQL",
+  "pubkey4": "2jLFkskX8B6XrJQnArAE75xLi91ffSm4Co3RDuyK6eUV",
+  "addressLUT": "92aEkQiURtqW7hqn3sZmY8uafm5qTTpVVN594AeeWGK8",
+  "mint": "2pe19TGJQXuZ67nCvcoENhYYgXJbGadR15AK4atV2e2c",
+  "mintPk": "KuN54BnBy8nNr9derGHtXv9sMixU7cpgkBGtKGt5SSude5sd9quE73XSBwrPBckFnfFhbsfjyjSwn97xVyuBQVv",
+  "9qyEtxTQcPiDADdMQzgnzosPH6uus7Tu2eUvDATy8swu": {
+    "solAmount": "0.00605",
+    "tokenAmount": "216344703818",
+    "percentSupply": 0.021634470381799997
+  },
+  "7gPb94pTWe2K6iByfVtv1z6irGB4JVaiyV3WRpPG2XXB": {
+    "solAmount": "0.001",
+    "tokenAmount": "35751053678",
+    "percentSupply": 0.0035751053678000004
+  },
+  "4Aq7Y3odisepFQLynaLnZ7LxxeAJcXuKrjSBn869M9p1": {
+    "solAmount": "0.001",
+    "tokenAmount": "35748670914",
+    "percentSupply": 0.0035748670914
+  },
+  "4ygs3qUgT2So4S4Rppksi8hUkqKUtKVk1A12rg2cKAQL": {
+    "solAmount": "0.001",
+    "tokenAmount": "35746288388",
+    "percentSupply": 0.0035746288387999998
+  },
+  "2jLFkskX8B6XrJQnArAE75xLi91ffSm4Co3RDuyK6eUV": {
+    "solAmount": "0.002",
+    "tokenAmount": "71485430152",
+    "percentSupply": 0.0071485430151999995
+  }
+}
