@@ -1,0 +1,55 @@
+import { requireSafe, SafetyError, validAddress, canonical } from './security.js';
+
+export const DEVNET_GENESIS = 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG';
+const ALLOWED_RPC = 'api.devnet.solana.com';
+const READ_METHODS = new Set(['getGenesisHash', 'getBalance', 'getAccountInfo', 'getSignatureStatuses']);
+function validateParams(method, params) {
+  requireSafe(Array.isArray(params), 'INVALID_RPC_PARAMETERS');
+  if (method === 'getGenesisHash') requireSafe(params.length === 0, 'INVALID_RPC_PARAMETERS');
+  if (method === 'getBalance') { requireSafe(params.length === 1, 'INVALID_RPC_PARAMETERS'); validAddress(params[0]); }
+  if (method === 'getAccountInfo') {
+    requireSafe(params.length === 2 && canonical(params[1]) === canonical({ encoding: 'base64', commitment: 'confirmed' }), 'INVALID_RPC_PARAMETERS'); validAddress(params[0]);
+  }
+  if (method === 'getSignatureStatuses') requireSafe(params.length === 2 && Array.isArray(params[0]) && params[0].length > 0 && params[0].length <= 5 && params[0].every(s => typeof s === 'string' && /^[1-9A-HJ-NP-Za-km-z]{64,88}$/.test(s)) && canonical(params[1]) === canonical({ searchTransactionHistory: true }), 'INVALID_RPC_PARAMETERS');
+}
+
+export class Rpc {
+  #url; #fetch; #id = 0; #verified = false;
+  constructor({ url = 'https://api.devnet.solana.com', fetchImpl = globalThis.fetch } = {}) {
+    let u; try { u = new URL(url); } catch { throw new SafetyError('INVALID_RPC_ENDPOINT'); }
+    requireSafe(u.protocol === 'https:' && u.hostname === ALLOWED_RPC && !u.username && !u.password && !u.port && u.pathname === '/' && !u.search && !u.hash, 'RPC_ENDPOINT_NOT_ALLOWED');
+    this.#url = u.href; this.#fetch = fetchImpl;
+  }
+  async #request(method, params) {
+    const id = ++this.#id;
+    let response;
+    try { response = await this.#fetch(this.#url, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(12000), headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id, method, params }) }); }
+    catch { throw new SafetyError('RPC_TRANSPORT_FAILED'); }
+    requireSafe(response.ok && response.body, 'RPC_HTTP_ERROR');
+    const chunks = []; let length = 0;
+    for await (const chunk of response.body) { length += chunk.length; if (length > 1024 * 1024) { await response.body.cancel?.().catch(() => {}); throw new SafetyError('RPC_RESPONSE_TOO_LARGE'); } chunks.push(chunk); }
+    let payload; try { payload = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw new SafetyError('RPC_INVALID_JSON'); }
+    requireSafe(payload.jsonrpc === '2.0' && payload.id === id && !payload.error && Object.hasOwn(payload, 'result'), 'RPC_RESPONSE_REJECTED');
+    return payload.result;
+  }
+  async verifyCluster() {
+    const genesis = await this.#request('getGenesisHash', []);
+    requireSafe(genesis === DEVNET_GENESIS, 'WRONG_CLUSTER'); this.#verified = true;
+  }
+  async read(method, params = []) {
+    requireSafe(READ_METHODS.has(method), 'RPC_METHOD_NOT_ALLOWED');
+    validateParams(method, params);
+    if (!this.#verified) await this.verifyCluster();
+    return this.#request(method, params);
+  }
+  async account(pubkey, owner) {
+    validAddress(pubkey); validAddress(owner);
+    const result = await this.read('getAccountInfo', [pubkey, { encoding: 'base64', commitment: 'confirmed' }]);
+    requireSafe(result && result.value && result.value.owner === owner && result.value.executable === false && Array.isArray(result.value.data) && result.value.data.length === 2 && result.value.data[1] === 'base64' && typeof result.value.data[0] === 'string' && Buffer.from(result.value.data[0], 'base64').toString('base64') === result.value.data[0], 'ACCOUNT_OWNER_OR_DATA_MISMATCH');
+    return Buffer.from(result.value.data[0], 'base64');
+  }
+  async send() {
+    // No environment variable or config switch bypasses protocol integration review.
+    throw new SafetyError('BROADCAST_DISABLED_PENDING_PROTOCOL_INTEGRATION');
+  }
+}

@@ -1,0 +1,342 @@
+{
+  "date": "2026-11-03",
+  "direct_dependency": "@solana/kit@8.6.0",
+  "archive_records": 47,
+  "retrieval_errors": 0,
+  "integrity_verified": 47,
+  "text_files_screened": 1400,
+  "oversize_exclusions": 0,
+  "install_hooks": 0,
+  "advisory_count": 0,
+  "packages": [
+    {
+      "name": "@solana/accounts",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/accounts/-/accounts-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "e9511a711075cfa857ae39d9cf76acf84041c89b3798ab0b7d03f31ea18899fc"
+    },
+    {
+      "name": "@solana/addresses",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/addresses/-/addresses-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "05cc5f5e2a281c455394df86f401344a4d9536630056df098a50baebb457df5b"
+    },
+    {
+      "name": "@solana/assertions",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/assertions/-/assertions-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "64dcac9ce3e237c686ec9111135f8c237da0a819b3c1ae320d76a4bae476822f"
+    },
+    {
+      "name": "@solana/codecs",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/codecs/-/codecs-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "8e2f8563f26794d20c2f76073cc368bb75f489ffd2e5fc971bbf9d1532072665"
+    },
+    {
+      "name": "@solana/codecs-core",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/codecs-core/-/codecs-core-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "0ae13a44f6ba2571369cb826cf5cfcaddc1ec8dcf0290d2f41db59040976b3ff"
+    },
+    {
+      "name": "@solana/codecs-data-structures",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/codecs-data-structures/-/codecs-data-structures-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "3ae0feb17149ed59c2bfb7b1c1d307ea40d8b9f6fdb785cd123a2979f3db9cfc"
+    },
+    {
+      "name": "@solana/codecs-numbers",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/codecs-numbers/-/codecs-numbers-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "04cb95a7d1fe7231fb00689b7bb7ab6751d78b43d405504cc061d50ef37f212d"
+    },
+    {
+      "name": "@solana/codecs-strings",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/codecs-strings/-/codecs-strings-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "2a405412141ce6f2a0a4afdb62b522ba3b50d92f114578ffdf494f763cf40069"
+    },
+    {
+      "name": "@solana/errors",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/errors/-/errors-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "1c838694519b71ab7a992c309ef55ea0cd74805742a4e975bcfbbc61a6a5bcac"
+    },
+    {
+      "name": "@solana/fast-stable-stringify",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/fast-stable-stringify/-/fast-stable-stringify-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "34b0d471fc732bdfb32bd7d679b83dc45a02468916fd49eff71422ccbf6abd95"
+    },
+    {
+      "name": "@solana/fixed-points",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/fixed-points/-/fixed-points-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "66e6a0116e180133e2b3aefce220c02199576728f0e9b548b91bbbb0546322bc"
+    },
+    {
+      "name": "@solana/functional",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/functional/-/functional-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "e0d29a8a7661ba941701bea2aa64bdba33ae40ca46a56872b86ed0dfaabbca3e"
+    },
+    {
+      "name": "@solana/instruction-plans",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/instruction-plans/-/instruction-plans-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "4f979ae44e1edd5551dd8d3e6ae23928365ed0d95779630f337aa17e3c08e3ec"
+    },
+    {
+      "name": "@solana/instructions",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/instructions/-/instructions-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "38346f36cac0f466f03a3bf1d7545f156c4a2f42fa5d01af80bf8ffde234a041"
+    },
+    {
+      "name": "@solana/keys",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/keys/-/keys-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "fc293fd62d57c5b857f33a77b0bae27355a9422f125dab0839bb1d926c18e6f7"
+    },
+    {
+      "name": "@solana/kit",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/kit/-/kit-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "40ec889d0b9de86fe86092f938f1ce1b217f1d8fd909680e64325e530fce8950"
+    },
+    {
+      "name": "@solana/nominal-types",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/nominal-types/-/nominal-types-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "c0897a39d67c0e848ee38655a8639c842a052f7eab2468af7cd0da0507b26ca0"
+    },
+    {
+      "name": "@solana/offchain-messages",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/offchain-messages/-/offchain-messages-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "5231183074bfe1b06635a7629cd5535c94a6d571e7f872de591717220a028959"
+    },
+    {
+      "name": "@solana/options",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/options/-/options-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "98fa78086c63ffc1ae66e015c0d551d45d7d61f33011f6ff8a58f8e54fc18410"
+    },
+    {
+      "name": "@solana/plugin-core",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/plugin-core/-/plugin-core-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "79ab530dd012f95c77938fab66e7fba4176fcb00b2729736528dd01e93eae7eb"
+    },
+    {
+      "name": "@solana/plugin-interfaces",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/plugin-interfaces/-/plugin-interfaces-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "38d1f38f9644258c73c99e52487320ffdb9f6b1e70a6fcc3a8100518ea9bdb7b"
+    },
+    {
+      "name": "@solana/program-client-core",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/program-client-core/-/program-client-core-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "f00ad4f988cad0e999e4299dfdc8ad07809b1179871e944c1a0c916ca6ce2065"
+    },
+    {
+      "name": "@solana/programs",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/programs/-/programs-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "6000166761f2b2d152ba08179e8ab12b72ad02cdd9b830bf39a0483a8e4b3147"
+    },
+    {
+      "name": "@solana/promises",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/promises/-/promises-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "c4879afcae06d14a558e9d31805b6870beccb851eb56e48763d108059ef414f4"
+    },
+    {
+      "name": "@solana/rpc",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/rpc/-/rpc-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "853a1fcc349656ef33df955724f8a69a7cd83bef09e2c2e5cf32db17b54512d7"
+    },
+    {
+      "name": "@solana/rpc-api",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/rpc-api/-/rpc-api-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "c046ab0678e5430e026e521278dc5ab7dfbb436b9f29d5df610c616941721a81"
+    },
+    {
+      "name": "@solana/rpc-parsed-types",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/rpc-parsed-types/-/rpc-parsed-types-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "b788e4326e3794397ced510dd5a488540d8107871f8ab57dca4f173ef8903dab"
+    },
+    {
+      "name": "@solana/rpc-spec",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/rpc-spec/-/rpc-spec-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "d533bf67537b6f236971a0796c70a166321198f9c8a58daadee52b65f52df998"
+    },
+    {
+      "name": "@solana/rpc-spec-types",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/rpc-spec-types/-/rpc-spec-types-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "3a551f92cebc0825f677cb5e9d6548cfebe70c40f3ec907293578d5d6b7c20a9"
+    },
+    {
+      "name": "@solana/rpc-subscriptions",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/rpc-subscriptions/-/rpc-subscriptions-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "7d9a0bbdc531fa4f7860d07cd022729f8c156e0526aa27f4707704c2b6edaa47"
+    },
+    {
+      "name": "@solana/rpc-subscriptions-api",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/rpc-subscriptions-api/-/rpc-subscriptions-api-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "d54e88877afb90f7219e2d957c741973d895a3b961539af54808a0ced5811c00"
+    },
+    {
+      "name": "@solana/rpc-subscriptions-channel-websocket",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/rpc-subscriptions-channel-websocket/-/rpc-subscriptions-channel-websocket-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "ba571d8e35459acc1f4eafa6b04c2d6174a739759f2a565c8fdcf587551f8ce0"
+    },
+    {
+      "name": "@solana/rpc-subscriptions-spec",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/rpc-subscriptions-spec/-/rpc-subscriptions-spec-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "548d43117a41a26bf07402c4c18ab049c49d18479c590684bb139b43b02e94f1"
+    },
+    {
+      "name": "@solana/rpc-transformers",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/rpc-transformers/-/rpc-transformers-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "b5357aade66f66a181a2a900f517156539ccfad0f0447ae4bd790f7f8dc1e559"
+    },
+    {
+      "name": "@solana/rpc-transport-http",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/rpc-transport-http/-/rpc-transport-http-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "ccb9c3ffa37a0fe760a5b33b08c6845943a23c7d82f3c50abd0d0e42699a2e1e"
+    },
+    {
+      "name": "@solana/rpc-types",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/rpc-types/-/rpc-types-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "d1716e13e620a09bcf273508c13ddbba2367caf777ae858cc9f98a474570827e"
+    },
+    {
+      "name": "@solana/signers",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/signers/-/signers-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "e6d4fcda55555e7b5ec184e32e50f844db4d1510f9940a7419652f72eca81151"
+    },
+    {
+      "name": "@solana/subscribable",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/subscribable/-/subscribable-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "02b472bba5a62f5a1cb4ef6c98ca7aa80aaa571637301b89b29aa9ab3b5d448e"
+    },
+    {
+      "name": "@solana/sysvars",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/sysvars/-/sysvars-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "f81cf7604c59be9d713c98bf578383cc6bd60b52307da28e95ce883b98c38caf"
+    },
+    {
+      "name": "@solana/transaction-confirmation",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/transaction-confirmation/-/transaction-confirmation-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "d4d3323c7d22e11fa421a99b9b29105bed1e41ab72111401653a9cfb725faf0f"
+    },
+    {
+      "name": "@solana/transaction-introspection",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/transaction-introspection/-/transaction-introspection-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "ef56835a4b1c14af8a04c9ce4fc9764ab2d5f83ec525ddd493d49ff7a7657057"
+    },
+    {
+      "name": "@solana/transaction-messages",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/transaction-messages/-/transaction-messages-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "0aa29e2e1739ad5114f2ddb308ae88ecf2b8ce4dbd534eb0d9df4b79645c5dec"
+    },
+    {
+      "name": "@solana/transactions",
+      "version": "8.6.0",
+      "resolved": "https://registry.npmjs.org/@solana/transactions/-/transactions-8.6.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "b99816b548dbb62322509dc5f12eaeda2fcd14b83421c90c6b620bed145ec567"
+    },
+    {
+      "name": "chalk",
+      "version": "5.6.2",
+      "resolved": "https://registry.npmjs.org/chalk/-/chalk-5.6.2.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "94957715a483aa3b9db60c8f22d5498227d8025c407f982eef81e34f37574ffd"
+    },
+    {
+      "name": "commander",
+      "version": "15.0.0",
+      "resolved": "https://registry.npmjs.org/commander/-/commander-15.0.0.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "632c1e039b31e98fa79c4fae5b10a5ffbbf9df0f21c9ffb3d74e95734b30696f"
+    },
+    {
+      "name": "undici-types",
+      "version": "8.12.3",
+      "resolved": "https://registry.npmjs.org/undici-types/-/undici-types-8.12.3.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "7d8660ef79e84afbb778fea2d064a37b68e1aa76d1f4b0ee8a1573b719b64c02"
+    },
+    {
+      "name": "ws",
+      "version": "8.22.1",
+      "resolved": "https://registry.npmjs.org/ws/-/ws-8.22.1.tgz",
+      "integrity_verified": true,
+      "archive_sha256": "a5cdb19c7090b816ffc109b6d928d352aa2bce73e38f73bd9678d484a62d2f75"
+    }
+  ]
+}

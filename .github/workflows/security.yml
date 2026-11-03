@@ -1,0 +1,23 @@
+name: Security verification
+on:
+  pull_request:
+  push:
+    branches: [main, 'security/**']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts
+      - run: node scripts/check-security.js
+      - run: npm test
+      - run: npm run check
+      - run: npm run audit:dependencies
