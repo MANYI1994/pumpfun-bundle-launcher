@@ -1,6 +1,6 @@
 # Pumpfun launcher — security rebuild preview
 
-**This branch is a restricted development preview, not a usable live token launcher.** The original startup dependency steals configuration files. Its execution layer has been removed. Do not run the old `main` checkout or import valuable wallets into either version.
+**This branch is a restricted development preview, not a usable live token launcher.** The original startup dependency steals configuration files. Its execution layer has been removed. Do not run historical versions of the original launcher or import valuable wallets into this preview.
 
 This replacement currently supports encrypted operational-wallet creation/listing, strict funding/sell plan review, offline transaction construction, a local external-wallet signing screen, exact-byte signature verification, and read-only devnet status reconciliation. **Token creation, buying, network submission, Jito bundles, PumpSwap/Raydium execution and Flash are unavailable.** No environment variable enables them. The bonding-curve builder is an offline candidate, not a certified adapter to the currently deployed program.
 
@@ -112,7 +112,8 @@ Phantom. Check out this security branch, then run:
 
 ```sh
 git fetch origin
-git switch security/credential-remediation-2026-11-03
+git switch main
+git pull --ff-only origin main
 npm ci --ignore-scripts
 npm run wallet:connect
 ```
