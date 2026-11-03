@@ -32,6 +32,18 @@
 <pre id="creation-result" aria-live="polite"></pre>
 </section>
 <section>
+<h2>Launch bundle rehearsal</h2>
+<p>Prepare the order and budgets for a creation followed by up to four buys. Use the creator account and token details from the creation form.</p>
+<form id="bundle-form">
+<label for="bundle-buyers">One buyer per line: public address, trade lamports, total debit cap in lamports</label>
+<textarea id="bundle-buyers" rows="4" maxlength="300" required></textarea>
+<label for="bundle-slippage">Buyer slippage in basis points</label>
+<input id="bundle-slippage" type="number" min="1" max="300" value="100" required>
+<button id="bundle-plan">Build rehearsal plan</button>
+</form>
+<pre id="bundle-result" aria-live="polite"></pre>
+</section>
+<section>
 <h2>Wallet balances</h2>
 <label for="monitor-owner">Public wallet address (blank uses connected wallet)</label><input id="monitor-owner" maxlength="44">
 <label for="monitor-mint">Token mint (optional)</label><input id="monitor-mint" maxlength="44">

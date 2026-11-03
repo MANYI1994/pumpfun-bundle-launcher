@@ -367,3 +367,14 @@ the native SOL debit. Execution mode allows separately approved submission
 with original-signature recovery. Nodes that omit simulation token balances
 cannot complete the check. The native SOL cap is a simulation check, while
 the swap instruction enforces its input budget and minimum token output.
+
+The **Launch bundle rehearsal** builds an ordered devnet plan for creation and
+up to four buyer transactions. It lists the mint and creator signers, buyer
+signers, per-wallet budgets and total debit caps. The five-transaction limit
+includes creation. Each buyer's minimum output remains unset until the adapter
+can model the new curve after creation and preceding buys. The rehearsal creates
+a review digest. Bundle transaction construction, tips, joint simulation and
+Block Engine submission are separate work. Jito's official endpoint list covers
+mainnet and testnet. The launcher's current execution transport uses devnet.
+
+[Jito bundle documentation](https://github.com/jito-labs/jito-docs/blob/main/docs/source/lowlatencytxnsend.md)

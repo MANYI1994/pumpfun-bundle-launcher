@@ -134,6 +134,24 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
       }
     } finally { creationSign.disabled = !creation; }
   });
+  field('bundle-form').addEventListener('submit', event => {
+    event.preventDefault();
+    try {
+      const slippageBps = Number(value('bundle-slippage'));
+      const buyers = value('bundle-buyers').split(/\r?\n/).map(line => {
+        const [address, spendLamports, maxDebitLamports, extra] = line.trim().split(/\s+/);
+        if (!address || !spendLamports || !maxDebitLamports || extra) {
+          throw new Error('Enter a public address, trade amount and debit cap on each line.');
+        }
+        return { address, spendLamports, maxDebitLamports, slippageBps };
+      });
+      action(field('bundle-plan'), 'bundle-result', '/api/launch-bundle-plan', {
+        creatorAddress: connectedAddress() || '', mintAddress: value('token-mint'),
+        metadata: metadata(), metadataUri: value('token-uri'),
+        creationMaxDebitLamports: value('creation-max-debit'), buyers,
+      });
+    } catch (error) { field('bundle-result').textContent = error.message; }
+  });
   const buyInput = () => ({
     owner: connectedAddress() || '', mint: value('monitor-mint'),
     spendLamports: value('buy-budget'), slippageBps: Number(value('buy-slippage')),

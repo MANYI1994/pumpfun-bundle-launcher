@@ -14,7 +14,7 @@ function stringField(value, maxBytes) {
     Buffer.byteLength(value) <= maxBytes && !/[\p{C}]/u.test(value), 'INVALID_METADATA_TEXT');
   return value;
 }
-function httpsField(value) {
+export function httpsField(value) {
   stringField(value, 200);
   let url;
   try { url = new URL(value); } catch { requireSafe(false, 'INVALID_METADATA_URL'); }
