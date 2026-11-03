@@ -317,3 +317,12 @@ covers standard SOL-paired pools and supported mint extensions. Estimates expire
 after 15 seconds. PumpSwap transaction construction and execution are pending.
 
 [PumpSwap V2 pricing and accounts](https://github.com/pump-fun/pump-public-docs/blob/639b87fb45c3adeffa6f7c4a1bf0cb85e392bf22/docs/instructions/PUMP_SWAP_TRADE_V2.md)
+
+To check signatures produced by external signers, run
+`npm start -- verify creation review.json REVIEW_DIGEST signed-wires.json verified.json`.
+The signed-wires file is a JSON array containing either one fully signed Base64
+transaction or two partially signed copies of the same message. The verifier
+rebuilds the creation message, checks both required signatures, and saves the
+combined wire to a new owner-only file. This is an offline check. Blockhash
+freshness, metadata publication, browser signing and submission still need
+integration.

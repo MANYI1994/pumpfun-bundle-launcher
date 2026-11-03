@@ -1,3 +1,4 @@
+import { verifyCreationSignatures } from './create-verification.js';
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -25,7 +26,7 @@ export async function main(args) {
   const [command, operation, ...rest] = args;
   if (!command || command === 'help') {
     console.log('Restricted devnet security rebuild. Trading and broadcasts are disabled pending protocol integration.');
-    console.log('wallet create <id> <buyer|payer|deployer|mint>\nwallet list\nplan fund <input.json> <new-output.json>\nplan sell <input.json> <new-output.json>\nplan collect <input.json> <new-output.json>\nmetadata build <input.json> <new-output.json>\nplan create <input.json> <new-review.json>\ninspect plan <plan.json>\nstatus signatures <signature...>');
+    console.log('wallet create <id> <buyer|payer|deployer|mint>\nwallet list\nplan fund <input.json> <new-output.json>\nplan sell <input.json> <new-output.json>\nplan collect <input.json> <new-output.json>\nmetadata build <input.json> <new-output.json>\nplan create <input.json> <new-review.json>\nverify creation <review.json> <digest> <signed-wires.json> <new-output.json>\ninspect plan <plan.json>\nstatus signatures <signature...>');
   } else if (command === 'wallet' && operation === 'create') {
     requireSafe(rest.length === 2, 'INVALID_ARGUMENTS');
     let password = await hiddenInput('New vault passphrase (16+ characters)');
@@ -46,6 +47,12 @@ export async function main(args) {
     assertDevnetContext(context);
     saveNew(rest[1], review);
     console.log('Unsigned token creation review saved.');
+  } else if (command === 'verify' && operation === 'creation') {
+    requireSafe(rest.length === 4, 'INVALID_ARGUMENTS');
+    const [reviewFile, confirmation, signedFile, outputFile] = rest;
+    const result = await verifyCreationSignatures(readJson(reviewFile), confirmation, readJson(signedFile));
+    saveNew(outputFile, result);
+    console.log('Mint and creator signatures verified.');
   } else if (command === 'plan' && ['fund', 'sell', 'collect'].includes(operation)) {
     requireSafe(rest.length === 2, 'INVALID_ARGUMENTS');
     const request = readJson(rest[0]); requireSafe(!Object.hasOwn(request, 'now'), 'CALLER_CLOCK_NOT_ALLOWED');
