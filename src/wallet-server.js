@@ -1,3 +1,5 @@
+import { inspectCreatedMint } from './creation-outcome.js';
+import { reviewTokenCreation } from './create-token.js';
 import { simulateVerifiedTrade } from './buy-simulation.js';
 import { PANEL_ROUTES, launcherPanel } from './launcher-panel.js';
 import http from 'node:http';
@@ -5,12 +7,12 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { collectionPlan, fundingPlan } from './plans.js';
+import { LIMITS, collectionPlan, fundingPlan } from './plans.js';
 import { ExecutionJournal } from './journal.js';
 import { NativeTransferExecutor } from './executor.js';
-import { Rpc } from './network.js';
-import { prepareBuySigningReview, prepareSellSigningReview, prepareCleanupSigningReview, prepareFundingReview, prepareCollectionReview, externalSigningPayload, verifySignedWireBatch } from './transactions.js';
-import { exactKeys, requireSafe, shortError } from './security.js';
+import { Rpc, assertDevnetContext } from './network.js';
+import { prepareCreationExecution, prepareBuySigningReview, prepareSellSigningReview, prepareCleanupSigningReview, prepareFundingReview, prepareCollectionReview, externalSigningPayload, verifySignedWireBatch } from './transactions.js';
+import { exactKeys, raw, requireSafe, shortError } from './security.js';
 
 const ASSETS = Object.freeze({ '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/wallet.js': ['wallet.js', 'text/javascript'], '/launcher-panel.js': ['launcher-panel.js', 'text/javascript'], '/watchlist.js': ['watchlist.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] });
 async function jsonBody(req) {
@@ -30,6 +32,7 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
   const executor = journal ? new NativeTransferExecutor(journal) : null;
   const token = randomBytes(32).toString('hex');
   let origin, active = null, verified = null, ticket = null, operationId = null, busy = false, revision = 0;
+  let pendingCreation;
   const server = http.createServer(async (req, res) => {
     const respond = (status, value) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value)); };
     res.setHeader('cache-control', 'no-store');
@@ -44,7 +47,7 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
       if (req.method === 'GET' && assets.has(req.url)) {
         const asset = assets.get(req.url); res.writeHead(200, { 'content-type': asset.mime + '; charset=utf-8' }); res.end(asset.bytes); return;
       }
-      requireSafe(req.method === 'POST' && ['/api/review', '/api/collection-review', '/api/batch-funding-review', '/api/buy-signing-review', '/api/sell-signing-review', '/api/cleanup-signing-review', '/api/verify', '/api/cancel', '/api/mode', '/api/simulate', '/api/submit', '/api/recover', '/api/operations', ...PANEL_ROUTES].includes(req.url), 'ROUTE_NOT_ALLOWED');
+      requireSafe(req.method === 'POST' && ['/api/create-review', '/api/create-simulate', '/api/review', '/api/collection-review', '/api/batch-funding-review', '/api/buy-signing-review', '/api/sell-signing-review', '/api/cleanup-signing-review', '/api/verify', '/api/cancel', '/api/mode', '/api/simulate', '/api/submit', '/api/recover', '/api/operations', ...PANEL_ROUTES].includes(req.url), 'ROUTE_NOT_ALLOWED');
       const supplied = req.headers['x-launcher-session'];
       requireSafe(req.headers.origin === origin && typeof supplied === 'string' && /^[a-f0-9]{64}$/.test(supplied)
         && timingSafeEqual(Buffer.from(token), Buffer.from(supplied)), 'SESSION_OR_ORIGIN_REJECTED');
@@ -57,7 +60,34 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
       }
       requireSafe(!busy, 'REQUEST_IN_PROGRESS'); busy = true;
       try {
-        if (PANEL_ROUTES.includes(req.url)) {
+        if (req.url === '/api/create-review') {
+          requireSafe(!ticket, 'EXISTING_EXECUTION_REQUIRES_RECOVERY');
+          exactKeys(body, ['metadata', 'metadataUri', 'mintAddress', 'creatorAddress', 'maxDebitLamports']);
+          const { maxDebitLamports, ...input } = body;
+          requireSafe(raw(maxDebitLamports) <= LIMITS.maxSpendLamports, 'TOTAL_DEBIT_LIMIT_EXCEEDED');
+          pendingCreation = undefined;
+          const context = await new Rpc().getBlockhashContext();
+          const envelope = await reviewTokenCreation(input, assertDevnetContext(context));
+          assertDevnetContext(context);
+          pendingCreation = { envelope, context, maxDebitLamports };
+          respond(200, { ...envelope, expiresAt: context.expiresAt });
+        } else if (req.url === '/api/create-simulate') {
+          requireSafe(!ticket, 'EXISTING_EXECUTION_REQUIRES_RECOVERY');
+          exactKeys(body, ['confirmation', 'signedWires']);
+          const creation = pendingCreation;
+          requireSafe(creation && body.confirmation === creation.envelope.digest, 'CREATION_REVIEW_NOT_ACTIVE');
+          pendingCreation = undefined;
+          active = null; verified = null;
+          const current = ++revision;
+          const { review, result } = await prepareCreationExecution(
+            creation.envelope, creation.context, creation.maxDebitLamports, body.signedWires);
+          const simulation = await simulateVerifiedTrade(review, result);
+          requireSafe(current === revision, 'REVIEW_CANCELLED');
+          verified = executor ? result : null;
+          operationId = review.details.plan.id;
+          respond(200, { ...simulation, plan: review.details.plan, executionEnabled: Boolean(executor),
+            executionDigest: result.executionDigest, operationId });
+        } else if (PANEL_ROUTES.includes(req.url)) {
           respond(200, await launcherPanel(req.url, body));
         } else if (['/api/review', '/api/collection-review', '/api/batch-funding-review'].includes(req.url)) {
           requireSafe(!ticket, 'EXISTING_EXECUTION_REQUIRES_RECOVERY');
@@ -121,7 +151,15 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
             exactKeys(body, ['operationId']);
             const result = await executor.recover(body.operationId);
             if (result.state === 'abandoned-before-submission' && ticket?.id === body.operationId) ticket = null;
-            respond(200, result);
+            const { intent } = journal.inspect(body.operationId);
+            if (result.state === 'finalized' && intent.action === 'create') {
+              try {
+                const creation = await inspectCreatedMint(new Rpc(), intent.mintAddress, intent.payerAddress);
+                respond(200, { ...result, creation });
+              } catch (error) {
+                respond(200, { ...result, creationInspectionError: shortError(error) });
+              }
+            } else respond(200, result);
           } else if (req.url === '/api/simulate') {
             exactKeys(body, ['executionDigest']);
             requireSafe(verified, 'NO_VERIFIED_EXECUTION');

@@ -211,16 +211,14 @@ transaction, required signer addresses and review digest. The transaction uses a
 SOL quote, Token-2022 and the standard curve, with optional modes disabled.
 
 The metadata builder works locally. Hosting and verification that the hosted bytes
-match the manifest are separate. Creation signing, submission and inspection of
-the resulting mint authorities remain pending. The funding executor accepts
+match the manifest are separate. Browser signing and submission are described below. The funding executor accepts
 only its existing native funding route. Live acceptance testing remains deferred.
 
 The local wallet page also includes metadata and unsigned creation review forms,
 wallet connection controls, and live devnet monitoring for SOL and associated
 token accounts. The sell panel reads the selected wallet's current associated
 token balance and uses an externally supplied quote to prepare a review.
-Creation execution is pending. The funding panel keeps its own review
-and approval flow.
+The funding panel keeps its own review and approval flow.
 
 The Buy review panel estimates an exact-budget SOL purchase for the connected
 wallet and selected mint. It reads the Pump curve and fee configuration on devnet
@@ -332,11 +330,17 @@ review. Sign with the connected account, switch accounts in the extension,
 then connect the remaining signer and sign the same review. Both signatures
 must arrive before the review expires. The server rebuilds the reviewed
 message, checks the signatures and confirms that the blockhash is valid on
-devnet. Creation simulation and submission are separate follow-up work.
+devnet. The execution controls described below follow simulation.
 
 The creation form accepts a maximum total SOL debit in lamports. After both
 wallet signatures arrive, the local server verifies the exact creation wire,
 checks the blockhash and quotes the message fee. It then simulates the signed
 wire on devnet and checks the payer's balance change plus a conservative fee
 allowance against the cap and reserve. The result is a simulation receipt.
-Creation submission and resulting mint verification remain pending.
+In execution mode, sign with the mint account first and reconnect the creator
+to finish signing and approve submission. The executor repeats simulation,
+persists the original signature and mint, and submits the same signed wire.
+Check the operation after finalization to inspect the mint and curve, including
+supply, decimals, creator match, mint authority and freeze authority. These
+fields describe the finalized accounts and do not assert authority revocation.
+Metadata hosting and live devnet acceptance remain outstanding.

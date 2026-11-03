@@ -21,7 +21,7 @@
 <input id="creation-max-debit" required maxlength="10" inputmode="numeric" pattern="[1-9][0-9]*">
 <button id="creation-review">Prepare unsigned creation review</button>
 </form>
-<p>Connect the creator to prepare the review. Then connect each required account in turn and sign the same review. The server simulates after both signatures arrive.</p>
+<p>Connect the creator to prepare the review. Sign with the mint account first, then reconnect the creator to sign and approve submission. The server simulates after both signatures arrive.</p>
 <button id="creation-sign" type="button" disabled>Sign with connected account</button>
 <pre id="creation-result" aria-live="polite"></pre>
 </section>
@@ -116,7 +116,8 @@
 </section>
 <section id="recovery-section" hidden><h2>Recover an operation</h2><p>Recovery checks the original signature and never resends. It can cancel a prepared operation that has not reached submission.</p>
 <button id="refresh-operations" class="secondary">Load saved operations</button><label for="operations">Operation</label><select id="operations"><option value="">Load operations first</option></select>
-<button id="recover" class="secondary" disabled>Check original operation</button></section>
+<button id="recover" class="secondary" disabled>Check original operation</button>
+<pre id="recovery-result" aria-live="polite"></pre></section>
 <p id="status" role="status" aria-live="polite">Open the complete session URL printed by the local server.</p>
 <p id="footnote" class="footnote">Desktop wallet extensions only in this step. Mobile deep links, trading and transaction submission are not enabled.</p>
 </main></body></html>

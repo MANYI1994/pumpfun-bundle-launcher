@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, readFileSync, readdirSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createKeyPairSignerFromPrivateKeyBytes, signTransaction, getBase64EncodedWireTransaction, getTransactionDecoder } from '@solana/kit';
+import { createKeyPairSignerFromPrivateKeyBytes, signTransaction, getAddressEncoder, getBase64EncodedWireTransaction, getTransactionDecoder } from '@solana/kit';
 
 // Isolated test-process RPC replacement. No real endpoint or broadcast is used.
 let scenario;
@@ -22,13 +22,16 @@ globalThis.fetch = async (url, options) => {
     case 'simulateTransaction':
       assert.equal(request.params[0], scenario.wire);
       assert.deepEqual(request.params[1], { encoding: 'base64', commitment: 'confirmed', sigVerify: true, replaceRecentBlockhash: false });
-      result = { context: { slot: 51 }, value: { err: scenario.simulationError, replacementBlockhash: null } }; break;
+      result = { context: { slot: 51 }, value: { err: scenario.simulationError, replacementBlockhash: null, ...scenario.simulationBalances } }; break;
     case 'sendTransaction':
       assert.equal(request.params[0], scenario.wire);
       assert.deepEqual(request.params[1], { encoding: 'base64', skipPreflight: false, preflightCommitment: 'confirmed', maxRetries: 0, minContextSlot: 51 });
       assert.equal(scenario.journal.inspect(scenario.operationId).decision.state, 'attempting');
       if (scenario.sendError) throw new Error('Upstream failure with diagnostics that must not leak');
       result = scenario.signature; break;
+    case 'getAccountInfo':
+      assert.equal(request.params[1].commitment, 'finalized');
+      result = { value: scenario.accounts.get(request.params[0]) }; break;
     case 'getSignatureStatuses':
       assert.deepEqual(request.params, [[scenario.signature], { searchTransactionHistory: true }]);
       result = { context: { slot: 55 }, value: [scenario.status] }; break;
@@ -179,3 +182,58 @@ for (const [action, route] of [['fund', '/api/review'], ['collect', '/api/collec
     assert.equal(sends(), 1);
   });
 }
+
+test('creation submission journals the mint and inspects finalized authorities', async t => {
+  const { root } = setup(t);
+  const creator = await createKeyPairSignerFromPrivateKeyBytes(new Uint8Array(32).fill(31));
+  const mint = await createKeyPairSignerFromPrivateKeyBytes(new Uint8Array(32).fill(32));
+  const { startWalletServer } = await import('../src/wallet-server.js');
+  const server = await startWalletServer({ port: 0, journalRoot: root });
+  t.after(() => server.close());
+  const token = new URLSearchParams(new URL(server.url).hash.slice(1)).get('session');
+  async function post(route, data) {
+    const response = await originalFetch(server.origin + route, {
+      method: 'POST', headers: { origin: server.origin, 'x-launcher-session': token, 'content-type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    assert.equal(response.status, 200, JSON.stringify(result));
+    return result;
+  }
+  const created = await post('/api/create-review', {
+    metadata: { name: 'Test mint', symbol: 'TEST', description: 'Fixture', image: 'https://example.com/image.png' },
+    metadataUri: 'https://example.com/metadata.json', creatorAddress: creator.address, mintAddress: mint.address,
+    maxDebitLamports: '5000000',
+  });
+  const unsigned = getTransactionDecoder().decode(Buffer.from(created.review.unsignedWireBase64, 'base64'));
+  const signed = await signTransaction([creator.keyPair, mint.keyPair], unsigned);
+  scenario.wire = getBase64EncodedWireTransaction(signed);
+  scenario.signature = (await import('@solana/kit')).getSignatureFromTransaction(signed);
+  scenario.simulationBalances = { fee: 5000, preBalances: [20000000], postBalances: [17000000] };
+  const simulated = await post('/api/create-simulate', { confirmation: created.digest, signedWires: [scenario.wire] });
+  scenario.operationId = simulated.operationId;
+  assert.equal(simulated.plan.mintAddress, mint.address);
+  assert.equal(sends(), 0);
+  await post('/api/simulate', { executionDigest: simulated.executionDigest });
+  await post('/api/submit', { executionDigest: simulated.executionDigest });
+  assert.equal(scenario.journal.inspect(simulated.operationId).intent.mintAddress, mint.address);
+
+  const mintData = Buffer.alloc(82);
+  mintData[44] = 6;
+  mintData[45] = 1;
+  mintData.writeBigUInt64LE(1000000000000000n, 36);
+  const curveData = Buffer.alloc(81);
+  Buffer.from([23, 183, 248, 55, 96, 216, 172, 96]).copy(curveData);
+  Buffer.from(getAddressEncoder().encode(creator.address)).copy(curveData, 49);
+  const account = (owner, data) => ({ owner, executable: false, data: [data.toString('base64'), 'base64'] });
+  scenario.accounts = new Map([
+    [mint.address, account('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb', mintData)],
+    [created.review.bondingCurve, account('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P', curveData)],
+  ]);
+  scenario.status = { slot: 55, err: null, confirmationStatus: 'finalized' };
+  const outcome = await post('/api/recover', { operationId: simulated.operationId });
+  assert.equal(outcome.creation.creatorMatches, true);
+  assert.equal(outcome.creation.mintAuthority, null);
+  assert.equal(outcome.creation.freezeAuthority, null);
+  assert.equal(sends(), 1);
+});

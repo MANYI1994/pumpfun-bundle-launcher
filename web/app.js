@@ -124,7 +124,9 @@ function showExecution(result, plan) {
       ? `Sell mint: ${plan.mint}\nWallet: ${plan.payerAddress}\nSource: ${plan.sourceTokenAccount}\nToken amount: ${plan.amountRaw} raw units\nMinimum SOL proceeds: ${plan.minimumOutputLamports} lamports\nProceeds wallet: ${plan.proceedsAddress}`
       : plan.action === 'cleanup'
         ? `Cleanup: ${plan.cleanupKind}\nAccount to close: ${plan.tokenAccount}\nExpected recovery: ${plan.recoveredLamports} lamports\nProceeds wallet: ${plan.proceedsAddress}`
-        : `Purpose: ${plan.action === 'collect' ? 'Collect SOL' : 'Fund wallet'}\nFrom: ${payer}\nRecipients: ${transferRecipients(plan).map(([address, amount]) => `\n${address} · ${amount} lamports`).join('')}\nTotal: ${plan.totalSpendLamports} lamports`;
+        : plan.action === 'create'
+          ? `Create mint: ${plan.mintAddress}\nCreator: ${payer}\nBonding curve: ${plan.bondingCurve}\nMetadata URL: ${plan.metadataUri}\nSimulation debit cap: ${plan.maxDebitLamports} lamports`
+          : `Purpose: ${plan.action === 'collect' ? 'Collect SOL' : 'Fund wallet'}\nFrom: ${payer}\nRecipients: ${transferRecipients(plan).map(([address, amount]) => `\n${address} · ${amount} lamports`).join('')}\nTotal: ${plan.totalSpendLamports} lamports`;
   $('execution-summary').textContent = `${summary}\nOperation: ${execution.id}`;
   $('execution-section').hidden = false;
   render();
@@ -173,6 +175,8 @@ $('recover').addEventListener('click', async () => {
     const result = await api('/api/recover', { operationId: $('operations').value });
     if (result.state === 'abandoned-before-submission' && execution?.id === result.id) { execution = null; $('execution-section').hidden = true; }
     status(`Operation ${result.id}: ${result.state}. Automatic resubmission is disabled.`);
+    $('recovery-result').textContent = result.creation ? JSON.stringify(result.creation, null, 2)
+      : result.creationInspectionError ?? '';
   }
   catch (e) { status(`Recovery unavailable: ${e.message}. Keep the original operation and try checking again later.`); }
   finally { busy = false; render(); }
@@ -184,7 +188,7 @@ if (validSession) {
     $('recovery-section').hidden = !executionEnabled;
     if (executionEnabled) {
       $('intro').textContent = 'Devnet execution mode: connect, review, sign, simulate and explicitly submit. Use disposable test SOL only.';
-      $('footnote').textContent = 'Desktop wallet extensions. Execution supports native SOL funding and collection, and reviewed single-wallet Pump buys and sells.';
+      $('footnote').textContent = 'Desktop wallet extensions. Execution supports native SOL funding and collection, and reviewed Pump creation, buys and sells.';
     }
   }).catch(() => status('Session unavailable. Reopen the complete local session URL.'));
 }

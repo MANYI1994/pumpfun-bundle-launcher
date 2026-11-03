@@ -1,4 +1,3 @@
-import { simulateCreation } from './create-simulation.js';
 import { verifyCreationSignatures } from './create-verification.js';
 import { reviewPumpSwap } from './pumpswap-review.js';
 import { detectMigration } from './migration.js';
@@ -7,11 +6,11 @@ import { buildBuyTransaction } from './buy-transaction.js';
 import { reviewBuy } from './buy-review.js';
 import { balances } from './wallet-balances.js';
 import { reviewSell } from './sell-review.js';
-import { Rpc, assertDevnetContext } from './network.js';
+import { Rpc } from './network.js';
 import { exactKeys, requireSafe, validAddress, shortError } from './security.js';
-import { tokenMetadata, reviewTokenCreation } from './create-token.js';
+import { tokenMetadata } from './create-token.js';
 
-export const PANEL_ROUTES = Object.freeze(['/api/metadata', '/api/create-review', '/api/create-verify', '/api/create-simulate', '/api/balances', '/api/watch-balances', '/api/migration', '/api/pumpswap-review', '/api/sell-review', '/api/sell-transaction', '/api/buy-review', '/api/buy-transaction']);
+export const PANEL_ROUTES = Object.freeze(['/api/metadata', '/api/create-verify', '/api/balances', '/api/watch-balances', '/api/migration', '/api/pumpswap-review', '/api/sell-review', '/api/sell-transaction', '/api/buy-review', '/api/buy-transaction']);
 
 export async function launcherPanel(route, input) {
   if (route === '/api/sell-transaction') return buildSellTransaction(input);
@@ -21,16 +20,6 @@ export async function launcherPanel(route, input) {
   if (route === '/api/migration') return detectMigration(input);
   if (route === '/api/metadata') return tokenMetadata(input);
   const rpc = new Rpc();
-  if (route === '/api/create-review') {
-    const context = await rpc.getBlockhashContext();
-    const result = await reviewTokenCreation(input, assertDevnetContext(context));
-    assertDevnetContext(context);
-    return { ...result, expiresAt: context.expiresAt };
-  }
-  if (route === '/api/create-simulate') {
-    exactKeys(input, ['envelope', 'confirmation', 'signedWires', 'maxDebitLamports']);
-    return simulateCreation(input, rpc);
-  }
   if (route === '/api/create-verify') {
     exactKeys(input, ['envelope', 'confirmation', 'signedWires']);
     const verified = await verifyCreationSignatures(input.envelope, input.confirmation, input.signedWires);

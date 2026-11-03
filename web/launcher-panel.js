@@ -42,7 +42,7 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
     try {
       const { expiresAt, ...envelope } = await api('/api/create-review', {
         metadata: metadata(), metadataUri: value('token-uri'), mintAddress: value('token-mint'),
-        creatorAddress: connectedAddress() || '',
+        creatorAddress: connectedAddress() || '', maxDebitLamports,
       });
       if (revision !== creationRevision) return;
       creation = { envelope, expiresAt, maxDebitLamports, signatures: new Map() };
@@ -79,12 +79,12 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
         return;
       }
       const result = await api('/api/create-simulate', {
-        envelope: current.envelope, confirmation: digest, signedWires: [...current.signatures.values()],
-        maxDebitLamports: current.maxDebitLamports,
+        confirmation: digest, signedWires: [...current.signatures.values()],
       });
       if (creation === current) {
         clearCreation();
         display('creation-result', result);
+        showExecution(result, result.plan);
       }
     } catch (error) {
       if (creation === current) {
