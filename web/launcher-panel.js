@@ -83,8 +83,8 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
   field('sell-form').addEventListener('submit', event => {
     event.preventDefault();
     action(field('sell-review'), 'sell-result', '/api/sell-review', {
-      ...target(), percent: value('sell-percent'), slippageBps: Number(value('sell-slippage')),
-      quotedOutputLamports: value('sell-quote'),
+      owner: connectedAddress() || '', mint: value('monitor-mint'),
+      percent: value('sell-percent'), slippageBps: Number(value('sell-slippage')),
     });
   });
   let timer;

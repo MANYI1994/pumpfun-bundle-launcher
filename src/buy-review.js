@@ -19,9 +19,10 @@ function readCurve(data) {
   const virtualTokens = data.readBigUInt64LE(8);
   const virtualSol = data.readBigUInt64LE(16);
   const realTokens = data.readBigUInt64LE(24);
+  const realSol = data.readBigUInt64LE(32);
   const supply = data.readBigUInt64LE(40);
   requireSafe(virtualTokens > realTokens && realTokens > 0n && virtualSol > 0n && supply >= realTokens, 'INVALID_CURVE_RESERVES');
-  return { virtualTokens, virtualSol, realTokens, supply, hasCreator: data.subarray(49, 81).some(byte => byte !== 0) };
+  return { virtualTokens, virtualSol, realTokens, realSol, supply, hasCreator: data.subarray(49, 81).some(byte => byte !== 0) };
 }
 
 function selectFeeTier(data, marketCap) {
@@ -53,20 +54,12 @@ export async function reviewBuy(input, rpc = new Rpc()) {
   requireSafe(spend <= LIMITS.maxSpendLamports, 'SPEND_LIMIT_EXCEEDED');
   requireSafe(Number.isSafeInteger(slippageBps) && slippageBps >= 1 &&
     slippageBps <= LIMITS.maxSlippageBps, 'SLIPPAGE_OUT_OF_RANGE');
-  const [[curveAddress], [feeAddress]] = await Promise.all([
-    getProgramDerivedAddress({ programAddress: PUMP, seeds: [Buffer.from('bonding-curve'), encoder.encode(mint)] }),
-    getProgramDerivedAddress({ programAddress: FEES_PROGRAM, seeds: [Buffer.from('fee_config'), encoder.encode(PUMP)] }),
-  ]);
   const observedAt = Date.now();
-  const [curveData, feeData, balance] = await Promise.all([
-    rpc.account(curveAddress, PUMP), rpc.account(feeAddress, FEES_PROGRAM), rpc.read('getBalance', [owner]),
+  const [{ curveAddress, curve, protocolBps, creatorBps }, balance] = await Promise.all([
+    readSolCurve(mint, rpc), rpc.read('getBalance', [owner]),
   ]);
   requireSafe(Number.isSafeInteger(balance?.value) && balance.value >= 0, 'INVALID_SOL_BALANCE');
   requireSafe(BigInt(balance.value) >= spend + LIMITS.feeReserveLamports, 'INSUFFICIENT_BALANCE_OR_FEE_RESERVE');
-  const curve = readCurve(curveData);
-  const marketCap = curve.virtualSol * curve.supply / curve.virtualTokens;
-  const { protocolBps, creatorBps: configuredCreatorBps } = selectFeeTier(feeData, marketCap);
-  const creatorBps = curve.hasCreator ? configuredCreatorBps : 0n;
   const feesFor = net => ceilDiv(net * protocolBps, BPS) + ceilDiv(net * creatorBps, BPS);
   let net = spend * BPS / (BPS + protocolBps + creatorBps);
   const excess = net + feesFor(net) - spend;
@@ -87,4 +80,19 @@ export async function reviewBuy(input, rpc = new Rpc()) {
   };
   requireSafe(Date.now() < review.expiresAt, 'BUY_REVIEW_EXPIRED');
   return frozenJson({ review, digest: digest(review) });
+}
+
+export async function readSolCurve(mint, rpc) {
+  validAddress(mint);
+  const [[curveAddress], [feeAddress]] = await Promise.all([
+    getProgramDerivedAddress({ programAddress: PUMP, seeds: [Buffer.from('bonding-curve'), encoder.encode(mint)] }),
+    getProgramDerivedAddress({ programAddress: FEES_PROGRAM, seeds: [Buffer.from('fee_config'), encoder.encode(PUMP)] }),
+  ]);
+  const [curveData, feeData] = await Promise.all([
+    rpc.account(curveAddress, PUMP), rpc.account(feeAddress, FEES_PROGRAM),
+  ]);
+  const curve = readCurve(curveData);
+  const marketCap = curve.virtualSol * curve.supply / curve.virtualTokens;
+  const { protocolBps, creatorBps } = selectFeeTier(feeData, marketCap);
+  return { curveAddress, curve, protocolBps, creatorBps: curve.hasCreator ? creatorBps : 0n };
 }

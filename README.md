@@ -253,3 +253,11 @@ the exact signed bytes. Recovery checks the original signature. The total debit
 cap is checked in simulation. The on-chain instruction enforces the trade budget
 and minimum token output, while fees and rent can depend on execution-time state.
 Live wallet acceptance testing remains deferred.
+
+The dashboard Sell review derives its estimate from the connected wallet's
+associated token account, the active SOL bonding curve and the Pump fee tier.
+It shows gross proceeds, estimated fees and minimum proceeds after slippage.
+The review expires after 15 seconds. It supports standard incomplete SOL curves
+and one funded, unfrozen associated token account. The legacy CLI sell planner
+continues to accept external quotes. Sell transaction construction and execution
+are pending.

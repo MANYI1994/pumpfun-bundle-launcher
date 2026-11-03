@@ -46,11 +46,10 @@
 </section>
 <section>
 <h2>Sell review</h2>
-<p>Uses the wallet and mint above. Supply a quote for the chosen percentage. The review is for inspection.</p>
+<p>Uses the connected wallet and selected mint. The estimate accounts for Pump fees. Network fees and rent are separate.</p>
 <form id="sell-form">
 <label for="sell-percent">Percentage of token balance</label><input id="sell-percent" required value="25" maxlength="6" inputmode="decimal">
 <label for="sell-slippage">Slippage in basis points</label><input id="sell-slippage" type="number" required min="1" max="300" value="100">
-<label for="sell-quote">Quoted proceeds in lamports</label><input id="sell-quote" required maxlength="20" inputmode="numeric">
 <button id="sell-review">Prepare sell review</button>
 </form>
 <pre id="sell-result" aria-live="polite"></pre>
