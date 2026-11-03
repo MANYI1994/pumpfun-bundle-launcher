@@ -354,3 +354,11 @@ HTTPS gateway for display URLs. Publication and pinning are performed by
 your chosen host.
 
 [CARv1 format](https://ipld.io/specs/transport/car/carv1/)
+
+The PumpSwap panel can compile unsigned V2 buys and sells from fresh estimates.
+It requires existing wallet base-token and wrapped-SOL associated accounts,
+and checks that the source holds the requested amount. Buy budgets are paid
+from wrapped SOL and sell proceeds land in the wallet's wrapped-SOL account.
+The cleanup panel handles unwrapping separately. This stage exposes the
+transaction and its fingerprint for review. PumpSwap signing and submission
+remain pending.

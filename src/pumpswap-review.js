@@ -112,7 +112,7 @@ export async function reviewPumpSwap(input, rpc = new Rpc()) {
   requireSafe(minimum > 0n, 'SWAP_ROUNDS_TO_ZERO');
   const review = {
     cluster: 'devnet', route: 'pumpswap', side, owner, mint, pool: route.pool,
-    baseVault: route.baseVault, quoteVault: route.quoteVault,
+    baseVault: route.baseVault, quoteVault: route.quoteVault, baseTokenProgram: program,
     baseReserveRaw: String(base), effectiveQuoteReserveLamports: String(quote),
     inputUnit: side === 'buy' ? 'lamports' : 'token-raw',
     outputUnit: side === 'buy' ? 'token-raw' : 'lamports',

@@ -162,6 +162,10 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
     field('pool-' + side + '-review').addEventListener('click', event => {
       action(event.currentTarget, side + '-result', '/api/pumpswap-review', { side, ...readInput() });
     });
+    field('pool-' + side + '-transaction').addEventListener('click', event => {
+      clearTradeApproval();
+      action(event.currentTarget, side + '-result', '/api/pumpswap-transaction', { side, ...readInput() });
+    });
   }
   let tradeApproval;
   let approvalRevision = 0;
