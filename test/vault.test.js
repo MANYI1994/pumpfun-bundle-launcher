@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, chmodSync, symlinkSync, statSync, readdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, chmodSync, symlinkSync, statSync, readdirSync, renameSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { Vault } from '../src/vault.js';
@@ -55,5 +55,56 @@ test('symlinks, loose permissions, directory traversal and locks are rejected', 
 });
 test('short passwords rejected without writing secrets', async t => {
   const { root, vault } = fixture(t); await assert.rejects(vault.create('buyer', 'buyer', 'short'), /PASSPHRASE/);
+  assert.deepEqual(readdirSync(root), []);
+});
+test('create validates existing orphan and malformed manifests before writing a new wallet', async t => {
+  const { root, vault } = fixture(t);
+  writeFileSync(path.join(root, 'old.vault'), '{}', { mode: 0o600 });
+  await assert.rejects(vault.create('new', 'buyer', password), /UNREGISTERED_WALLET/);
+  assert.deepEqual(readdirSync(root), ['old.vault']);
+  rmSync(path.join(root, 'old.vault'));
+  writeFileSync(path.join(root, 'manifest.json'), '{"version":1,"wallets":[{"id":"../escape"}]}', { mode: 0o600 });
+  await assert.rejects(vault.create('new', 'buyer', password));
+  assert.deepEqual(readdirSync(root), ['manifest.json']);
+});
+test('vault root permission changes are rejected after construction', t => {
+  const { root, vault } = fixture(t); chmodSync(root, 0o755);
+  assert.throws(() => vault.list(), /UNSAFE_FILE_PERMISSIONS/);
+  chmodSync(root, 0o700); assert.deepEqual(vault.list(), []);
+  assert.throws(() => { vault.root = root + '-other'; });
+});
+test('a replaced vault directory is rejected before touching the replacement', t => {
+  const { root, vault } = fixture(t), old = root + '-original';
+  t.after(() => rmSync(old, { recursive: true, force: true }));
+  renameSync(root, old); mkdirSync(root, { mode: 0o700 });
+  assert.throws(() => vault.list(), /VAULT_DIRECTORY_REPLACED/);
+  assert.deepEqual(readdirSync(root), []);
+});
+test('unexpected recovery/temp files block operations instead of being ignored', async t => {
+  const { root, vault } = fixture(t);
+  writeFileSync(path.join(root, 'manifest-interrupted.tmp'), '{}', { mode: 0o600 });
+  assert.throws(() => vault.list(), /UNEXPECTED_VAULT_FILE/);
+  await assert.rejects(vault.create('buyer', 'buyer', password), /UNEXPECTED_VAULT_FILE/);
+});
+test('failed authentication wipes both the derived key and unauthenticated plaintext buffer', async t => {
+  const { root, vault } = fixture(t); await vault.create('buyer', 'buyer', password);
+  const file = path.join(root, 'buyer.vault'), p = JSON.parse(readFileSync(file));
+  p.tag = Buffer.alloc(16).toString('base64'); writeFileSync(file, JSON.stringify(p));
+  const cleared = [], fill = Buffer.prototype.fill;
+  t.mock.method(Buffer.prototype, 'fill', function(value, ...rest) {
+    const result = fill.call(this, value, ...rest);
+    if (value === 0 && this.length === 32) cleared.push(this);
+    return result;
+  });
+  await assert.rejects(vault.unlock('buyer', password), /VAULT_AUTHENTICATION_FAILED/);
+  assert.ok(cleared.length >= 2);
+  assert.ok(cleared.every(b => b.every(byte => byte === 0)));
+});
+test('wallet identifiers are strings, not coerced values', async t => {
+  const { root, vault } = fixture(t);
+  for (const id of [true, undefined, null, 123]) {
+    await assert.rejects(vault.create(id, 'buyer', password), /INVALID_WALLET_ID_OR_ROLE/);
+    await assert.rejects(vault.unlock(id, password), /INVALID_WALLET_ID/);
+  }
   assert.deepEqual(readdirSync(root), []);
 });

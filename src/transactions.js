@@ -4,8 +4,9 @@ import {
   compileTransaction, signTransaction, assertIsFullySignedTransaction,
   getBase64EncodedWireTransaction, getAddressEncoder, getProgramDerivedAddress,
 } from '@solana/kit';
-import { raw, requireSafe, validAddress, digest } from './security.js';
+import { raw, requireSafe, validAddress, digest, frozenJson, equalDigest } from './security.js';
 import { validateEnvelope, LIMITS } from './plans.js';
+import { assertDevnetContext } from './network.js';
 
 export const SYSTEM = '11111111111111111111111111111111';
 export const TOKEN = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
@@ -46,6 +47,8 @@ export function compileFunding(envelope, confirmation, lifetime, now = Date.now(
 // All required token-owner signatures are retained; no consolidation or random payer.
 export async function compileCurveSells(envelope, confirmation, lifetime, state, now = Date.now()) {
   const plan = validateEnvelope(envelope, confirmation, now);
+  state = frozenJson(state);
+  lifetime = Object.freeze({ blockhash: lifetime.blockhash, lastValidBlockHeight: lifetime.lastValidBlockHeight });
   requireSafe(plan.action === 'sell' && plan.tipLamports === '0', 'UNSUPPORTED_SELL_PLAN');
   requireSafe(state && state.owner === PUMP && state.mint === plan.mint && state.complete === false, 'CURVE_OR_MINT_MISMATCH');
   validAddress(state.creator); validAddress(state.feeRecipient);
@@ -67,11 +70,67 @@ export async function compileCurveSells(envelope, confirmation, lifetime, state,
   requireSafe(transactions.length <= LIMITS.maxWallets, 'BUNDLE_TOO_LARGE');
   return transactions;
 }
-export async function signComplete(transaction, signers) {
+async function signComplete(transaction, signers) {
   const expected = Object.keys(transaction.signatures).sort();
   requireSafe(Array.isArray(signers) && new Set(signers.map(s => s.address)).size === signers.length && signers.map(s => s.address).sort().join(',') === expected.join(','), 'SIGNER_SET_MISMATCH');
   const signed = await signTransaction(signers.map(s => s.keyPair), transaction);
   assertIsFullySignedTransaction(signed);
+  for (const owner of expected) {
+    const publicKey = await crypto.subtle.importKey('raw', bytes(owner), 'Ed25519', false, ['verify']);
+    requireSafe(await crypto.subtle.verify('Ed25519', publicKey, signed.signatures[owner], signed.messageBytes), 'INVALID_TRANSACTION_SIGNATURE');
+  }
   return bounded(signed);
 }
 export function transactionFingerprint(transaction) { return digest({ message: Buffer.from(transaction.messageBytes).toString('base64'), signers: Object.keys(transaction.signatures) }); }
+
+// Only reviews issued by this module can be signed. Serialized hashes alone are
+// not capabilities: raw caller-supplied transaction objects are never accepted.
+const pendingReviews = new WeakMap();
+function issueReview(envelope, transactions, lifetime, context = null) {
+  const plan = validateEnvelope(envelope, envelope.digest);
+  const details = {
+    version: 1, cluster: 'devnet', plan, planDigest: envelope.digest,
+    expiresAt: context ? Math.min(plan.expiresAt, context.expiresAt) : plan.expiresAt,
+    signingAllowed: Boolean(context) && plan.action === 'fund',
+    blockhash: lifetime.blockhash, lastValidBlockHeight: String(lifetime.lastValidBlockHeight),
+    transactions: transactions.map(tx => ({ messageBase64: Buffer.from(tx.messageBytes).toString('base64'), requiredSigners: Object.keys(tx.signatures).sort(), fingerprint: transactionFingerprint(tx) })),
+    broadcast: false,
+  };
+  const review = frozenJson({ details, digest: digest(details) });
+  pendingReviews.set(review, { transactions, context });
+  return review;
+}
+export function prepareFundingReview(envelope, confirmation, context) {
+  const snapshot = Object.freeze(assertDevnetContext(context));
+  const tx = compileFunding(envelope, confirmation, snapshot);
+  return issueReview(envelope, [tx], snapshot, context);
+}
+export async function prepareCurveSellReview(envelope, confirmation, lifetime, state) {
+  const snapshot = Object.freeze({ blockhash: lifetime.blockhash, lastValidBlockHeight: lifetime.lastValidBlockHeight });
+  // Snapshot the envelope before any await to bind the review to the built plan.
+  const approved = frozenJson(envelope);
+  const txs = await compileCurveSells(approved, confirmation, snapshot, state);
+  return issueReview(approved, txs, snapshot);
+}
+export async function signReviewedBatch(review, confirmation, signers) {
+  const issued = pendingReviews.get(review);
+  requireSafe(issued && equalDigest(confirmation, review.digest) && equalDigest(review.digest, digest(review.details)), 'REVIEW_NOT_ISSUED_OR_UNAPPROVED');
+  requireSafe(review.details.signingAllowed && review.details.plan.action === 'fund', 'UNVERIFIED_TRADE_SIGNING_DISABLED');
+  const { transactions, context } = issued;
+  assertDevnetContext(context);
+  requireSafe(Date.now() < review.details.expiresAt, 'REVIEW_EXPIRED');
+  const expected = [...new Set(transactions.flatMap(tx => Object.keys(tx.signatures)))].sort();
+  requireSafe(Array.isArray(signers) && signers.length === expected.length && new Set(signers.map(s => s.address)).size === signers.length && signers.map(s => s.address).sort().join(',') === expected.join(','), 'SIGNER_SET_MISMATCH');
+  requireSafe(transactions.every((tx, i) => transactionFingerprint(tx) === review.details.transactions[i].fingerprint), 'TRANSACTION_CHANGED_AFTER_REVIEW');
+  // Consume before the first async signing operation to reject concurrent/replay use.
+  pendingReviews.delete(review);
+  const result = [];
+  for (const tx of transactions) {
+    assertDevnetContext(context);
+    requireSafe(Date.now() < review.details.expiresAt, 'REVIEW_EXPIRED');
+    result.push(await signComplete(tx, signers.filter(s => Object.hasOwn(tx.signatures, s.address))));
+  }
+  requireSafe(Date.now() < review.details.expiresAt, 'REVIEW_EXPIRED');
+  assertDevnetContext(context);
+  return result;
+}

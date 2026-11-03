@@ -29,7 +29,7 @@ npm start -- wallet list
 
 Creation requires a real interactive terminal and asks twice for a hidden passphrase of at least 16 characters. Use a password-manager-generated random passphrase. The CLI prints only public wallet identifiers and addresses. All operational roles use the same encrypted format; there is no main treasury key import.
 
-Private seeds are encrypted using AES-256-GCM with fresh random salt/nonce and scrypt parameters fixed in code (`N=32768, r=8, p=1`). Wallet metadata is authenticated. Owner-only file/directory permissions, no-follow reads, exclusive creation, a manifest and a lock prevent common accidental exposures and overwrites. Decrypted seed buffers are cleared after importing non-extractable WebCrypto signing keys. JavaScript strings and the runtime's internal key objects cannot be guaranteed to be wiped; encryption does not defeat malware running as your user while the vault is unlocked.
+Private seeds are encrypted using AES-256-GCM with fresh random salt/nonce and scrypt parameters fixed in code (`N=32768, r=8, p=1`). Wallet metadata is authenticated. Owner-only file/directory permissions, bounded nonblocking no-follow reads, exclusive creation, a fully checked manifest and a lock prevent common accidental exposures and overwrites. Root directory identity/permissions are rechecked for operations; unexpected recovery files stop the operation. Both decrypted seed buffers and unauthenticated partial plaintext are cleared, including after authentication failure. Non-extractable WebCrypto signing keys are used. JavaScript strings and the runtime's internal key objects cannot be guaranteed to be wiped; encryption does not defeat malware running as your user while the vault is unlocked.
 
 Back up the **entire encrypted vault directory including its manifest**, while no command is running, to an offline location. Keep its passphrase separately. There is intentionally no overwrite/delete/reset command. A stale `.lock` or orphan `.vault` after a crash fails closed: preserve a copy first and inspect/recover state manually; do not delete keys or blindly clear locks. A lost passphrase has no recovery back door. Do not put funds into this preview's wallets.
 
@@ -55,6 +55,12 @@ npm start -- plan sell input.json new-sell-plan.json
 ```
 
 Unknown/migrated routes are rejected. No hard-coded 25% rule is presented as actual price-impact protection. Real execution needs authenticated fresh account state, a tested quote adapter and enforced settlement, not just a percentage rule.
+
+## Offline signing boundary
+
+There is no raw-transaction signing export or CLI signing command. The library's funding signing path requires an in-process devnet blockhash context issued after RPC cluster verification, an immutable exact-message review and its explicit review digest. Contexts expire after 30 seconds (or earlier if the plan expires). Reconstructed JSON/hashes, arbitrary blockhashes, wrong/extra/missing signers and replay/concurrent reuse are rejected. The authorization is consumed before signing begins, and all resulting signatures are cryptographically checked. Contexts/approvals are local process capabilities, not an attestation secure against malicious code inside the signer process.
+
+Curve reviews remain unsigned: their externally supplied quote/state is unverified, so `signReviewedBatch` rejects them. RPC arguments, curve inputs and blockhash fields are snapshotted before asynchronous work to prevent changes after validation. Already-issued signatures are not revoked by a local review timeout; a future submission implementation must separately enforce freshness. No broadcast implementation exists.
 
 ## What remains before any live use
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Rpc, DEVNET_GENESIS } from '../src/network.js';
+import { Rpc, DEVNET_GENESIS, assertDevnetContext } from '../src/network.js';
 import { reconcile } from '../src/settlement.js';
 const response = (id, result) => new Response(JSON.stringify({ jsonrpc: '2.0', id, result }), { headers: { 'content-type': 'application/json' } });
 test('devnet genesis pin is the complete public cluster hash', () => {
@@ -45,12 +45,50 @@ test('account reads reject the wrong owner and noncanonical encoded data', async
     await assert.rejects(rpc.account(pubkey, expected), /ACCOUNT_OWNER_OR_DATA_MISMATCH/);
   }
 });
+test('RPC parameters cannot be swapped while genesis verification is pending', async () => {
+  let releaseGenesis;
+  const bodies = [];
+  const rpc = new Rpc({ fetchImpl: async (_url, o) => {
+    const p = JSON.parse(o.body); bodies.push(p);
+    if (p.method === 'getGenesisHash') return new Promise(resolve => { releaseGenesis = () => resolve(response(p.id, DEVNET_GENESIS)); });
+    return response(p.id, { value: 1 });
+  } });
+  const params = ['11111111111111111111111111111111'];
+  const pending = rpc.read('getBalance', params);
+  params[0] = 'must-never-be-forwarded';
+  releaseGenesis(); await pending;
+  assert.deepEqual(bodies[1].params, ['11111111111111111111111111111111']);
+});
+test('blockhash contexts require cluster verification and a validated lifetime response', async () => {
+  const calls = [];
+  const rpc = new Rpc({ fetchImpl: async (_u, o) => {
+    const p = JSON.parse(o.body); calls.push(p.method);
+    return response(p.id, p.method === 'getGenesisHash' ? DEVNET_GENESIS : { value: { blockhash: '11111111111111111111111111111111', lastValidBlockHeight: 10 } });
+  } });
+  const context = await rpc.getBlockhashContext();
+  assert.deepEqual(calls, ['getGenesisHash', 'getLatestBlockhash']);
+  assert.equal(assertDevnetContext(context).lastValidBlockHeight, 10n);
+  assert.throws(() => assertDevnetContext(structuredClone(context)), /UNVERIFIED_OR_EXPIRED/);
+  const bad = new Rpc({ fetchImpl: async (_u, o) => { const p = JSON.parse(o.body); return response(p.id, p.method === 'getGenesisHash' ? DEVNET_GENESIS : { value: { blockhash: '11111111111111111111111111111111', lastValidBlockHeight: -1 } }); } });
+  await assert.rejects(bad.getBlockhashContext(), /INVALID_BLOCKHASH_LIFETIME/);
+});
 test('settlement never treats accepted, pending or timeout as success', async () => {
   let time = 0;
   const signature = '1'.repeat(88);
   const rpc = { read: async () => ({ value: [null] }) };
   const result = await reconcile(rpc, [signature], { timeoutMs: 3, pollMs: 1, now: () => time, wait: async ms => { time += ms; } });
   assert.equal(result.state, 'unknown'); assert.equal(result.resubmit, false);
-  await assert.rejects(reconcile({ read: async () => ({ value: [{ err: { failed: true } }] }) }, [signature]), /TRANSACTION_FAILED/);
+  await assert.rejects(reconcile({ read: async () => ({ value: [{ err: { failed: true }, confirmationStatus: 'processed' }] }) }, [signature]), /TRANSACTION_FAILED/);
   assert.equal((await reconcile({ read: async () => ({ value: [{ err: null, confirmationStatus: 'finalized' }] }) }, [signature])).state, 'finalized');
+});
+test('settlement cannot attribute a finalized result to caller-swapped signatures', async () => {
+  const signatures = ['1'.repeat(88)]; let release;
+  const rpc = { read: async () => new Promise(resolve => { release = () => resolve({ value: [{ err: null, confirmationStatus: 'finalized' }] }); }) };
+  const pending = reconcile(rpc, signatures);
+  signatures[0] = '2'.repeat(88); release();
+  const result = await pending;
+  assert.deepEqual(result.signatures, ['1'.repeat(88)]); assert.ok(Object.isFrozen(result.signatures));
+});
+test('malformed finalized statuses cannot bypass explicit error/status validation', async () => {
+  for (const entry of [{ confirmationStatus: 'finalized' }, { confirmationStatus: 'finalized', err: false }, { confirmationStatus: 'invented', err: null }]) await assert.rejects(reconcile({ read: async () => ({ value: [entry] }) }, ['1'.repeat(88)]), /INVALID_STATUS_RESPONSE/);
 });

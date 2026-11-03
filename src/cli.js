@@ -1,4 +1,4 @@
-import { openSync, closeSync, fstatSync, readFileSync, writeFileSync, constants } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -8,11 +8,10 @@ import { fundingPlan, sellPlan, validateEnvelope } from './plans.js';
 import { requireSafe, shortError } from './security.js';
 import { Rpc } from './network.js';
 import { reconcile } from './settlement.js';
+import { readRegularFile } from './files.js';
 
 function readJson(file) {
-  const fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW);
-  try { const stat = fstatSync(fd); requireSafe(stat.isFile() && stat.size <= 65536, 'INPUT_FILE_TOO_LARGE'); return JSON.parse(readFileSync(fd, 'utf8')); }
-  finally { closeSync(fd); }
+  return JSON.parse(readRegularFile(file));
 }
 function saveNew(file, value) { writeFileSync(file, JSON.stringify(value, null, 2) + '\n', { mode: 0o600, flag: 'wx' }); }
 function vault() {
