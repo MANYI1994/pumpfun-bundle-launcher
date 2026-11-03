@@ -333,3 +333,10 @@ then connect the remaining signer and sign the same review. Both signatures
 must arrive before the review expires. The server rebuilds the reviewed
 message, checks the signatures and confirms that the blockhash is valid on
 devnet. Creation simulation and submission are separate follow-up work.
+
+The creation form accepts a maximum total SOL debit in lamports. After both
+wallet signatures arrive, the local server verifies the exact creation wire,
+checks the blockhash and quotes the message fee. It then simulates the signed
+wire on devnet and checks the payer's balance change plus a conservative fee
+allowance against the cap and reserve. The result is a simulation receipt.
+Creation submission and resulting mint verification remain pending.

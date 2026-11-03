@@ -1,3 +1,4 @@
+import { simulateCreation } from '../src/create-simulation.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createKeyPairSignerFromPrivateKeyBytes, getTransactionDecoder, partiallySignTransaction, signTransaction, getBase64EncodedWireTransaction } from '@solana/kit';
@@ -17,4 +18,19 @@ test('creation verification merges independently signed wires in canonical order
   await assert.rejects(verifyCreationSignatures(envelope, envelope.digest, [mintWire]), /MINT_AND_CREATOR/);
   const result = await verifyCreationSignatures(envelope, envelope.digest, [mintWire, creatorWire]);
   assert.equal(result.signedWireBase64, getBase64EncodedWireTransaction(await signTransaction([creator.keyPair, mint.keyPair], tx)));
+  const request = { envelope, confirmation: envelope.digest, signedWires: [mintWire, creatorWire], maxDebitLamports: '5000000' };
+  const rpc = { async read(method, params) {
+    if (method === 'isBlockhashValid') return { value: true };
+    if (method === 'getFeeForMessage') return { value: 10000 };
+    assert.equal(method, 'simulateTransaction');
+    assert.equal(params[0], result.signedWireBase64);
+    assert.equal(params[1].sigVerify, true);
+    return { value: { err: null, fee: 10000, preBalances: [20000000], postBalances: [17000000] } };
+  } };
+  const receipt = await simulateCreation(request, rpc);
+  assert.equal(receipt.budget.totalDebitLamports, '3010000');
+  assert.equal(receipt.broadcast, false);
+  await assert.rejects(simulateCreation({ ...request, maxDebitLamports: '3000000' }, rpc),
+    /SIMULATED_DEBIT_OUTSIDE_APPROVAL/);
+
 });

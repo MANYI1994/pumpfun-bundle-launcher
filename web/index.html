@@ -17,9 +17,11 @@
 <button id="metadata-build" type="button">Generate metadata JSON</button>
 <label for="token-uri">Hosted metadata JSON URL</label><input id="token-uri" type="url" required maxlength="200">
 <label for="token-mint">Fresh mint public address</label><input id="token-mint" required maxlength="44">
+<label for="creation-max-debit">Maximum creation debit in lamports, including fees and rent</label>
+<input id="creation-max-debit" required maxlength="10" inputmode="numeric" pattern="[1-9][0-9]*">
 <button id="creation-review">Prepare unsigned creation review</button>
 </form>
-<p>Connect the creator to prepare the review. Then connect each required account in turn and sign the same review.</p>
+<p>Connect the creator to prepare the review. Then connect each required account in turn and sign the same review. The server simulates after both signatures arrive.</p>
 <button id="creation-sign" type="button" disabled>Sign with connected account</button>
 <pre id="creation-result" aria-live="polite"></pre>
 </section>

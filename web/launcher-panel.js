@@ -35,6 +35,7 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
     event.preventDefault();
     clearCreation();
     const revision = creationRevision;
+    const maxDebitLamports = value('creation-max-debit');
     const button = field('creation-review');
     button.disabled = true;
     field('creation-result').textContent = 'Preparing creation review…';
@@ -44,9 +45,9 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
         creatorAddress: connectedAddress() || '',
       });
       if (revision !== creationRevision) return;
-      creation = { envelope, expiresAt, signatures: new Map() };
+      creation = { envelope, expiresAt, maxDebitLamports, signatures: new Map() };
       const { unsignedWireBase64, ...summary } = envelope.review;
-      display('creation-result', { ...summary, digest: envelope.digest, expiresAt: new Date(expiresAt).toISOString() });
+      display('creation-result', { ...summary, maxDebitLamports, digest: envelope.digest, expiresAt: new Date(expiresAt).toISOString() });
       creationSign.disabled = false;
     } catch (error) { field('creation-result').textContent = error.message; }
     finally { button.disabled = false; }
@@ -77,8 +78,9 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
         display('creation-result', { signedBy: [...current.signatures.keys()], remaining });
         return;
       }
-      const result = await api('/api/create-verify', {
+      const result = await api('/api/create-simulate', {
         envelope: current.envelope, confirmation: digest, signedWires: [...current.signatures.values()],
+        maxDebitLamports: current.maxDebitLamports,
       });
       if (creation === current) {
         clearCreation();

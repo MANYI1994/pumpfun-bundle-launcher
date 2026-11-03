@@ -1,3 +1,4 @@
+import { simulateCreation } from './create-simulation.js';
 import { verifyCreationSignatures } from './create-verification.js';
 import { reviewPumpSwap } from './pumpswap-review.js';
 import { detectMigration } from './migration.js';
@@ -10,7 +11,7 @@ import { Rpc, assertDevnetContext } from './network.js';
 import { exactKeys, requireSafe, validAddress, shortError } from './security.js';
 import { tokenMetadata, reviewTokenCreation } from './create-token.js';
 
-export const PANEL_ROUTES = Object.freeze(['/api/metadata', '/api/create-review', '/api/create-verify', '/api/balances', '/api/watch-balances', '/api/migration', '/api/pumpswap-review', '/api/sell-review', '/api/sell-transaction', '/api/buy-review', '/api/buy-transaction']);
+export const PANEL_ROUTES = Object.freeze(['/api/metadata', '/api/create-review', '/api/create-verify', '/api/create-simulate', '/api/balances', '/api/watch-balances', '/api/migration', '/api/pumpswap-review', '/api/sell-review', '/api/sell-transaction', '/api/buy-review', '/api/buy-transaction']);
 
 export async function launcherPanel(route, input) {
   if (route === '/api/sell-transaction') return buildSellTransaction(input);
@@ -25,6 +26,10 @@ export async function launcherPanel(route, input) {
     const result = await reviewTokenCreation(input, assertDevnetContext(context));
     assertDevnetContext(context);
     return { ...result, expiresAt: context.expiresAt };
+  }
+  if (route === '/api/create-simulate') {
+    exactKeys(input, ['envelope', 'confirmation', 'signedWires', 'maxDebitLamports']);
+    return simulateCreation(input, rpc);
   }
   if (route === '/api/create-verify') {
     exactKeys(input, ['envelope', 'confirmation', 'signedWires']);
