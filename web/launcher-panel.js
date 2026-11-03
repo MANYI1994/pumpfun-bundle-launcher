@@ -51,6 +51,11 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
     if (!field('sell-form').reportValidity()) return;
     action(field('sell-transaction'), 'sell-result', '/api/sell-transaction', sellInput());
   });
+  for (const [side, readInput] of [['buy', buyInput], ['sell', sellInput]]) {
+    field('pool-' + side + '-review').addEventListener('click', event => {
+      action(event.currentTarget, side + '-result', '/api/pumpswap-review', { side, ...readInput() });
+    });
+  }
   let tradeApproval;
   let approvalRevision = 0;
   function clearTradeApproval() {
@@ -69,6 +74,7 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
       event.preventDefault();
       clearTradeApproval();
     });
+    field('pool-' + actionName + '-review')?.addEventListener('click', clearTradeApproval);
     field(actionName + '-transaction')?.addEventListener('click', clearTradeApproval);
     field(actionName + '-prepare-sign').addEventListener('click', async event => {
       if (!field(actionName + '-form').reportValidity()) return;

@@ -1,3 +1,4 @@
+import { reviewPumpSwap } from './pumpswap-review.js';
 import { detectMigration } from './migration.js';
 import { buildSellTransaction } from './sell-transaction.js';
 import { buildBuyTransaction } from './buy-transaction.js';
@@ -8,12 +9,13 @@ import { Rpc, assertDevnetContext } from './network.js';
 import { exactKeys, requireSafe, validAddress, shortError } from './security.js';
 import { tokenMetadata, reviewTokenCreation } from './create-token.js';
 
-export const PANEL_ROUTES = Object.freeze(['/api/metadata', '/api/create-review', '/api/balances', '/api/watch-balances', '/api/migration', '/api/sell-review', '/api/sell-transaction', '/api/buy-review', '/api/buy-transaction']);
+export const PANEL_ROUTES = Object.freeze(['/api/metadata', '/api/create-review', '/api/balances', '/api/watch-balances', '/api/migration', '/api/pumpswap-review', '/api/sell-review', '/api/sell-transaction', '/api/buy-review', '/api/buy-transaction']);
 
 export async function launcherPanel(route, input) {
   if (route === '/api/sell-transaction') return buildSellTransaction(input);
   if (route === '/api/buy-transaction') return buildBuyTransaction(input);
   if (route === '/api/buy-review') return reviewBuy(input);
+  if (route === '/api/pumpswap-review') return reviewPumpSwap(input);
   if (route === '/api/migration') return detectMigration(input);
   if (route === '/api/metadata') return tokenMetadata(input);
   const rpc = new Rpc();

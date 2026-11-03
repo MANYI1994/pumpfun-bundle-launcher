@@ -25,7 +25,7 @@ function readCurve(data) {
   return { virtualTokens, virtualSol, realTokens, realSol, supply, hasCreator: data.subarray(49, 81).some(byte => byte !== 0) };
 }
 
-function selectFeeTier(data, marketCap) {
+export function selectFeeTier(data, marketCap) {
   // Borsh layout: discriminator, bump, admin, flat fees, tier count, tiers.
   requireSafe(data.length >= 69 && data.subarray(0, 8).equals(FEES_DISCRIMINATOR), 'INVALID_FEE_CONFIG');
   const count = data.readUInt32LE(65);
@@ -38,10 +38,10 @@ function selectFeeTier(data, marketCap) {
     requireSafe(threshold > previous, 'INVALID_FEE_TIER_ORDER');
     previous = threshold;
     if (index === 0 || threshold <= marketCap) {
-      selected = { protocolBps: data.readBigUInt64LE(offset + 24), creatorBps: data.readBigUInt64LE(offset + 32) };
+      selected = { lpBps: data.readBigUInt64LE(offset + 16), protocolBps: data.readBigUInt64LE(offset + 24), creatorBps: data.readBigUInt64LE(offset + 32) };
     }
   }
-  requireSafe(selected.protocolBps + selected.creatorBps < BPS, 'INVALID_FEE_RATE');
+  requireSafe(selected.lpBps + selected.protocolBps + selected.creatorBps < BPS, 'INVALID_FEE_RATE');
   return selected;
 }
 

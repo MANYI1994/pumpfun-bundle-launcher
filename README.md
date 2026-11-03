@@ -307,3 +307,13 @@ devnet. The dashboard distinguishes an active SOL curve, a completed curve
 awaiting its canonical pool, and a canonical PumpSwap pool with verified program
 ownership and mint identity. It displays the pool and recorded vault addresses.
 Pool liquidity checks, quotes and swap execution are the next integration steps.
+
+For a migrated mint, use **Get PumpSwap buy estimate** or **Get PumpSwap sell
+estimate**. The adapter verifies the canonical pool and its vaults, reads the
+base mint supply and fee tier, and prices against effective quote reserves
+including the signed virtual-reserve adjustment. It shows LP, protocol and
+creator fee rates, estimated output and a slippage floor. The first version
+covers standard SOL-paired pools and supported mint extensions. Estimates expire
+after 15 seconds. PumpSwap transaction construction and execution are pending.
+
+[PumpSwap V2 pricing and accounts](https://github.com/pump-fun/pump-public-docs/blob/639b87fb45c3adeffa6f7c4a1bf0cb85e392bf22/docs/instructions/PUMP_SWAP_TRADE_V2.md)

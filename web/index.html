@@ -58,7 +58,8 @@
 <form id="buy-form">
 <label for="buy-budget">Trade budget in lamports</label><input id="buy-budget" required maxlength="10" inputmode="numeric" pattern="[1-9][0-9]*" value="1000000">
 <label for="buy-slippage">Slippage in basis points</label><input id="buy-slippage" type="number" required min="1" max="300" value="100">
-<button id="buy-review">Get buy estimate</button>
+<button id="buy-review">Get curve buy estimate</button>
+<button id="pool-buy-review" type="button" class="secondary">Get PumpSwap buy estimate</button>
 <button id="buy-transaction" type="button" class="secondary">Build unsigned buy review</button>
 <label for="buy-max-debit">Maximum total debit in lamports, including rent and fees</label><input id="buy-max-debit" maxlength="10" inputmode="numeric" pattern="[1-9][0-9]*">
 <button id="buy-prepare-sign" type="button" class="secondary">Prepare wallet approval</button>
@@ -72,7 +73,8 @@
 <form id="sell-form">
 <label for="sell-percent">Percentage of token balance</label><input id="sell-percent" required value="25" maxlength="6" inputmode="decimal">
 <label for="sell-slippage">Slippage in basis points</label><input id="sell-slippage" type="number" required min="1" max="300" value="100">
-<button id="sell-review">Get sell estimate</button>
+<button id="sell-review">Get curve sell estimate</button>
+<button id="pool-sell-review" type="button" class="secondary">Get PumpSwap sell estimate</button>
 <button id="sell-transaction" type="button" class="secondary">Build unsigned sell review</button>
 <button id="sell-prepare-sign" type="button" class="secondary">Prepare sell wallet approval</button>
 <button id="sell-sign-simulate" type="button" disabled>Sign and simulate this sell</button>
