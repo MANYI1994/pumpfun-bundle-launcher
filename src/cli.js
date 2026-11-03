@@ -6,7 +6,8 @@ import { Vault } from './vault.js';
 import { hiddenInput } from './terminal.js';
 import { fundingPlan, sellPlan, collectionPlan, validateEnvelope } from './plans.js';
 import { requireSafe, shortError } from './security.js';
-import { Rpc } from './network.js';
+import { tokenMetadata, reviewTokenCreation } from './create-token.js';
+import { Rpc, assertDevnetContext } from './network.js';
 import { reconcile } from './settlement.js';
 import { readRegularFile } from './files.js';
 
@@ -24,7 +25,7 @@ export async function main(args) {
   const [command, operation, ...rest] = args;
   if (!command || command === 'help') {
     console.log('Restricted devnet security rebuild. Trading and broadcasts are disabled pending protocol integration.');
-    console.log('wallet create <id> <buyer|payer|deployer|mint>\nwallet list\nplan fund <input.json> <new-output.json>\nplan sell <input.json> <new-output.json>\nplan collect <input.json> <new-output.json>\ninspect plan <plan.json>\nstatus signatures <signature...>');
+    console.log('wallet create <id> <buyer|payer|deployer|mint>\nwallet list\nplan fund <input.json> <new-output.json>\nplan sell <input.json> <new-output.json>\nplan collect <input.json> <new-output.json>\nmetadata build <input.json> <new-output.json>\nplan create <input.json> <new-review.json>\ninspect plan <plan.json>\nstatus signatures <signature...>');
   } else if (command === 'wallet' && operation === 'create') {
     requireSafe(rest.length === 2, 'INVALID_ARGUMENTS');
     let password = await hiddenInput('New vault passphrase (16+ characters)');
@@ -34,6 +35,17 @@ export async function main(args) {
   } else if (command === 'wallet' && operation === 'list') {
     requireSafe(rest.length === 0, 'INVALID_ARGUMENTS');
     console.log(JSON.stringify(vault().list().map(({ id, role, address }) => ({ id, role, address })), null, 2));
+  } else if (command === 'metadata' && operation === 'build') {
+    requireSafe(rest.length === 2, 'INVALID_ARGUMENTS');
+    saveNew(rest[1], tokenMetadata(readJson(rest[0])));
+  } else if (command === 'plan' && operation === 'create') {
+    requireSafe(rest.length === 2, 'INVALID_ARGUMENTS');
+    const input = readJson(rest[0]);
+    const context = await new Rpc().getBlockhashContext();
+    const review = await reviewTokenCreation(input, assertDevnetContext(context));
+    assertDevnetContext(context);
+    saveNew(rest[1], review);
+    console.log('Unsigned token creation review saved.');
   } else if (command === 'plan' && ['fund', 'sell', 'collect'].includes(operation)) {
     requireSafe(rest.length === 2, 'INVALID_ARGUMENTS');
     const request = readJson(rest[0]); requireSafe(!Object.hasOwn(request, 'now'), 'CALLER_CLOCK_NOT_ALLOWED');

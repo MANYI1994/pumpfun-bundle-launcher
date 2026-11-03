@@ -23,7 +23,7 @@ export function transferInstruction(from, to, lamports) {
   const tag = Buffer.alloc(4); tag.writeUInt32LE(2);
   return { programAddress: SYSTEM, accounts: [meta(from, true, true), meta(to, true)], data: Buffer.concat([tag, u64(raw(String(lamports)))]) };
 }
-function message(payer, lifetime, instructions) {
+export function message(payer, lifetime, instructions) {
   validAddress(payer); validAddress(lifetime.blockhash);
   requireSafe(typeof lifetime.lastValidBlockHeight === 'bigint' && lifetime.lastValidBlockHeight > 0n, 'INVALID_BLOCKHASH_LIFETIME');
   let m = createTransactionMessage({ version: 'legacy' });
@@ -31,7 +31,7 @@ function message(payer, lifetime, instructions) {
   m = setTransactionMessageLifetimeUsingBlockhash(lifetime, m);
   return appendTransactionMessageInstructions(instructions, m);
 }
-function bounded(tx) {
+export function bounded(tx) {
   const wire = getBase64EncodedWireTransaction(tx);
   requireSafe(Buffer.from(wire, 'base64').length <= 1232, 'TRANSACTION_TOO_LARGE');
   return tx;

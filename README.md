@@ -196,3 +196,21 @@ See [EXECUTION_ARCHITECTURE.md](docs/EXECUTION_ARCHITECTURE.md) for module bound
 API flow, failure states and scope. This executor supports one signed native funding
 transaction. Collection, token creation, buys, sells, PumpSwap, bundles and mainnet
 must receive their own adapters and reviews before they can use execution.
+
+## Step 3: Pump token creation review
+
+Run `npm start -- metadata build input.json metadata.json` with a JSON object
+containing `name`, `symbol`, `description` and an HTTPS `image` URL. Publish the
+image and resulting JSON with your chosen host. Prefer immutable metadata hosting.
+
+Run `npm start -- plan create creation.json review.json` with `metadata` (the
+same metadata object), `metadataUri` (its hosted HTTPS JSON URL), `creatorAddress`
+and a fresh, distinct `mintAddress`. Both addresses are public. The CLI obtains a
+devnet blockhash and writes a review containing the unsigned Pump `create_v2`
+transaction, required signer addresses and review digest. The transaction uses a
+SOL quote, Token-2022 and the standard curve, with optional modes disabled.
+
+The metadata builder works locally. Hosting and verification that the hosted bytes
+match the manifest are separate. Creation signing, submission and inspection of
+the resulting mint authorities remain pending. The funding executor accepts
+only its existing native funding route. Live acceptance testing remains deferred.
