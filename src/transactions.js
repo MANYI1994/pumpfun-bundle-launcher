@@ -170,19 +170,27 @@ export async function prepareCleanupSigningReview(input) {
   return issueValidatedReview(plan, digest(plan), [tx], lifetime, context, evidence);
 }
 
-export async function prepareCreationExecution(envelope, context, maxDebitLamports, signedWires) {
+export async function creationBudgetEvidence(envelope, context, maxDebitLamports) {
   const lifetime = assertDevnetContext(context);
   const cap = raw(maxDebitLamports);
   requireSafe(cap <= LIMITS.maxSpendLamports, 'TOTAL_DEBIT_LIMIT_EXCEEDED');
-  const { verifyCreationSignatures } = await import('./create-verification.js');
-  const signed = await verifyCreationSignatures(envelope, envelope.digest, signedWires);
   const creation = envelope.review;
   requireSafe(creation.blockhash === lifetime.blockhash &&
     creation.lastValidBlockHeight === String(lifetime.lastValidBlockHeight), 'CREATION_CONTEXT_MISMATCH');
   const tx = getTransactionDecoder().decode(Buffer.from(creation.unsignedWireBase64, 'base64'));
   const evidence = await fundingBudgetEvidence(context, creation.creatorAddress, Buffer.from(tx.messageBytes).toString('base64'));
-  requireSafe(BigInt(evidence.feeLamports) <= cap && BigInt(evidence.balanceLamports) >= cap + LIMITS.feeReserveLamports,
+  requireSafe(BigInt(evidence.feeLamports) <= cap, 'CREATION_FEE_EXCEEDS_CAP');
+  requireSafe(BigInt(evidence.balanceLamports) >= cap + LIMITS.feeReserveLamports,
     'INSUFFICIENT_BALANCE_OR_FEE_RESERVE');
+  return { lifetime, tx, cap, evidence };
+}
+
+export async function prepareCreationExecution(envelope, context, maxDebitLamports, signedWires, reviewedFee) {
+  const { verifyCreationSignatures } = await import('./create-verification.js');
+  const signed = await verifyCreationSignatures(envelope, envelope.digest, signedWires);
+  const { lifetime, tx, cap, evidence } = await creationBudgetEvidence(envelope, context, maxDebitLamports);
+  requireSafe(evidence.feeLamports === reviewedFee, 'FEE_CHANGED_REVIEW_REQUIRED');
+  const creation = envelope.review;
   const plan = frozenJson({ action: 'create', id: randomUUID(), payerAddress: creation.creatorAddress,
     mintAddress: creation.mintAddress, bondingCurve: creation.bondingCurve, metadataUri: creation.metadataUri,
     maxDebitLamports: String(cap), tradeBudgetLamports: '0', expiresAt: context.expiresAt });

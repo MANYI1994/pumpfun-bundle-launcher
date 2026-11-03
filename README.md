@@ -437,3 +437,8 @@ later. That digest covers the reported deployment metadata. Binary hashing
 and instruction compatibility checks are separate production tasks.
 
 [Upgradeable loader account layout](https://github.com/anza-xyz/solana-sdk/blob/master/loader-v3-interface/src/state.rs)
+
+The creation review checks that the mint and derived curve accounts are
+unused and that the creator's SOL covers the requested total debit cap
+plus the reserve. It displays the message fee before the wallet prompts.
+A change in that fee requires a fresh review before simulation.

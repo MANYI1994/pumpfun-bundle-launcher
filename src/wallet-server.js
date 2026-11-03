@@ -15,7 +15,7 @@ import { LIMITS, collectionPlan, fundingPlan } from './plans.js';
 import { ExecutionJournal } from './journal.js';
 import { NativeTransferExecutor } from './executor.js';
 import { Rpc, assertDevnetContext } from './network.js';
-import { preparePumpSwapSigningReview, prepareCreationExecution, prepareBuySigningReview, prepareSellSigningReview, prepareCleanupSigningReview, prepareFundingReview, prepareCollectionReview, externalSigningPayload, verifySignedWireBatch } from './transactions.js';
+import { preparePumpSwapSigningReview, creationBudgetEvidence, prepareCreationExecution, prepareBuySigningReview, prepareSellSigningReview, prepareCleanupSigningReview, prepareFundingReview, prepareCollectionReview, externalSigningPayload, verifySignedWireBatch } from './transactions.js';
 import { exactKeys, raw, requireSafe, shortError } from './security.js';
 
 const ASSETS = Object.freeze({ '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/wallet.js': ['wallet.js', 'text/javascript'], '/launcher-panel.js': ['launcher-panel.js', 'text/javascript'], '/watchlist.js': ['watchlist.js', 'text/javascript'], '/metadata-package.js': ['metadata-package.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] });
@@ -109,11 +109,18 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
           const { maxDebitLamports, ...input } = body;
           requireSafe(raw(maxDebitLamports) <= LIMITS.maxSpendLamports, 'TOTAL_DEBIT_LIMIT_EXCEEDED');
           pendingCreation = undefined;
-          const context = await new Rpc().getBlockhashContext({ reviewLifetimeMs: 60000 });
+          const rpc = new Rpc();
+          const context = await rpc.getBlockhashContext({ reviewLifetimeMs: 60000 });
           const envelope = await reviewTokenCreation(input, assertDevnetContext(context));
+          const [mint, curve, budget] = await Promise.all([
+            ...[envelope.review.mintAddress, envelope.review.bondingCurve].map(address =>
+              rpc.read('getAccountInfo', [address, { encoding: 'base64', commitment: 'confirmed' }])),
+            creationBudgetEvidence(envelope, context, maxDebitLamports),
+          ]);
+          requireSafe(mint?.value === null && curve?.value === null, 'CREATION_MINT_OR_CURVE_ALREADY_EXISTS');
           assertDevnetContext(context);
-          pendingCreation = { envelope, context, maxDebitLamports };
-          respond(200, { ...envelope, expiresAt: context.expiresAt });
+          pendingCreation = { envelope, context, maxDebitLamports, reviewedFee: budget.evidence.feeLamports };
+          respond(200, { ...envelope, expiresAt: context.expiresAt, budget: budget.evidence });
         } else if (req.url === '/api/create-simulate') {
           requireSafe(!ticket, 'EXISTING_EXECUTION_REQUIRES_RECOVERY');
           exactKeys(body, ['confirmation', 'signedWires']);
@@ -123,7 +130,7 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
           active = null; verified = null;
           const current = ++revision;
           const { review, result } = await prepareCreationExecution(
-            creation.envelope, creation.context, creation.maxDebitLamports, body.signedWires);
+            creation.envelope, creation.context, creation.maxDebitLamports, body.signedWires, creation.reviewedFee);
           const simulation = await simulateVerifiedTrade(review, result);
           requireSafe(current === revision, 'REVIEW_CANCELLED');
           verified = executor ? result : null;

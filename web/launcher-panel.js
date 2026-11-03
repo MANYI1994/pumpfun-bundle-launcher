@@ -85,14 +85,15 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
     button.disabled = true;
     field('creation-result').textContent = 'Preparing creation review…';
     try {
-      const { expiresAt, ...envelope } = await api('/api/create-review', {
+      const { expiresAt, budget, ...envelope } = await api('/api/create-review', {
         metadata: metadata(), metadataUri: value('token-uri'), mintAddress: value('token-mint'),
         creatorAddress: connectedAddress() || '', maxDebitLamports,
       });
       if (revision !== creationRevision) return;
       creation = { envelope, expiresAt, maxDebitLamports, signatures: new Map() };
       const { unsignedWireBase64, ...summary } = envelope.review;
-      display('creation-result', { ...summary, maxDebitLamports, digest: envelope.digest, expiresAt: new Date(expiresAt).toISOString() });
+      display('creation-result', { ...summary, maxDebitLamports, quotedNetworkFeeLamports: budget.feeLamports,
+        creatorBalanceLamports: budget.balanceLamports, digest: envelope.digest, expiresAt: new Date(expiresAt).toISOString() });
       renderSigningStatus();
     } catch (error) { field('creation-result').textContent = error.message; }
     finally { button.disabled = false; }

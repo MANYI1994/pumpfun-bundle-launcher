@@ -30,8 +30,13 @@ globalThis.fetch = async (url, options) => {
       if (scenario.sendError) throw new Error('Upstream failure with diagnostics that must not leak');
       result = scenario.signature; break;
     case 'getAccountInfo':
-      assert.equal(request.params[1].commitment, 'finalized');
-      result = { value: scenario.accounts.get(request.params[0]) }; break;
+      if (request.params[1].commitment === 'confirmed') {
+        result = { value: scenario.creationAccount ?? null };
+      } else {
+        assert.equal(request.params[1].commitment, 'finalized');
+        result = { value: scenario.accounts.get(request.params[0]) };
+      }
+      break;
     case 'getSignatureStatuses':
       assert.deepEqual(request.params, [[scenario.signature], { searchTransactionHistory: true }]);
       result = { context: { slot: 55 }, value: [scenario.status] }; break;
@@ -205,6 +210,7 @@ test('creation submission journals the mint and inspects finalized authorities',
     metadataUri: 'https://example.com/metadata.json', creatorAddress: creator.address, mintAddress: mint.address,
     maxDebitLamports: '5000000',
   });
+  assert.equal(created.budget.feeLamports, '5000');
   const unsigned = getTransactionDecoder().decode(Buffer.from(created.review.unsignedWireBase64, 'base64'));
   const signed = await signTransaction([creator.keyPair, mint.keyPair], unsigned);
   scenario.wire = getBase64EncodedWireTransaction(signed);
