@@ -9,7 +9,7 @@ import { collectionPlan, fundingPlan } from './plans.js';
 import { ExecutionJournal } from './journal.js';
 import { NativeTransferExecutor } from './executor.js';
 import { Rpc } from './network.js';
-import { prepareBuySigningReview, prepareSellSigningReview, prepareFundingReview, prepareCollectionReview, externalSigningPayload, verifySignedWireBatch } from './transactions.js';
+import { prepareBuySigningReview, prepareSellSigningReview, prepareCleanupSigningReview, prepareFundingReview, prepareCollectionReview, externalSigningPayload, verifySignedWireBatch } from './transactions.js';
 import { exactKeys, requireSafe, shortError } from './security.js';
 
 const ASSETS = Object.freeze({ '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/wallet.js': ['wallet.js', 'text/javascript'], '/launcher-panel.js': ['launcher-panel.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] });
@@ -44,7 +44,7 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
       if (req.method === 'GET' && assets.has(req.url)) {
         const asset = assets.get(req.url); res.writeHead(200, { 'content-type': asset.mime + '; charset=utf-8' }); res.end(asset.bytes); return;
       }
-      requireSafe(req.method === 'POST' && ['/api/review', '/api/collection-review', '/api/buy-signing-review', '/api/sell-signing-review', '/api/verify', '/api/cancel', '/api/mode', '/api/simulate', '/api/submit', '/api/recover', '/api/operations', ...PANEL_ROUTES].includes(req.url), 'ROUTE_NOT_ALLOWED');
+      requireSafe(req.method === 'POST' && ['/api/review', '/api/collection-review', '/api/buy-signing-review', '/api/sell-signing-review', '/api/cleanup-signing-review', '/api/verify', '/api/cancel', '/api/mode', '/api/simulate', '/api/submit', '/api/recover', '/api/operations', ...PANEL_ROUTES].includes(req.url), 'ROUTE_NOT_ALLOWED');
       const supplied = req.headers['x-launcher-session'];
       requireSafe(req.headers.origin === origin && typeof supplied === 'string' && /^[a-f0-9]{64}$/.test(supplied)
         && timingSafeEqual(Buffer.from(token), Buffer.from(supplied)), 'SESSION_OR_ORIGIN_REJECTED');
@@ -84,10 +84,11 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
           requireSafe(current === revision, 'REVIEW_CANCELLED');
           active = review;
           respond(200, externalSigningPayload(review, review.digest, input.owner));
-        } else if (req.url === '/api/sell-signing-review') {
+        } else if (['/api/sell-signing-review', '/api/cleanup-signing-review'].includes(req.url)) {
           requireSafe(!ticket, 'EXISTING_EXECUTION_REQUIRES_RECOVERY');
           active = null; verified = null; const current = ++revision;
-          const review = await prepareSellSigningReview(body);
+          const prepareReview = req.url === '/api/cleanup-signing-review' ? prepareCleanupSigningReview : prepareSellSigningReview;
+          const review = await prepareReview(body);
           requireSafe(current === revision, 'REVIEW_CANCELLED');
           active = review;
           respond(200, externalSigningPayload(review, review.digest, body.owner));
@@ -98,7 +99,7 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
           const current = revision;
           const result = await verifySignedWireBatch(review, body.reviewDigest, body.signedTransactions);
           requireSafe(current === revision, 'REVIEW_CANCELLED');
-          if (['buy', 'sell'].includes(review.details.plan.action)) {
+          if (['buy', 'sell', 'cleanup'].includes(review.details.plan.action)) {
             const simulation = await simulateVerifiedTrade(review, result);
             requireSafe(current === revision, 'REVIEW_CANCELLED');
             verified = executor ? result : null;

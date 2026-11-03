@@ -5,7 +5,7 @@ import { requireSafe } from './security.js';
 
 export async function simulateVerifiedTrade(review, verified, rpc = new Rpc()) {
   const plan = review.details.plan;
-  requireSafe(['buy', 'sell'].includes(plan.action) && verified.productionVerified && verified.transactions.length === 1, 'INVALID_TRADE_SIMULATION');
+  requireSafe(['buy', 'sell', 'cleanup'].includes(plan.action) && verified.productionVerified && verified.transactions.length === 1, 'INVALID_TRADE_SIMULATION');
   const { wireBase64, fingerprint } = verified.transactions[0];
   const result = await rpc.read('simulateTransaction', [wireBase64, {
     encoding: 'base64', commitment: 'confirmed', sigVerify: true, replaceRecentBlockhash: false,

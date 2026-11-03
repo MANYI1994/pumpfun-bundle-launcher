@@ -71,6 +71,16 @@
 <pre id="execution-summary"></pre><button id="simulate" disabled>Simulate signed transaction</button>
 <label class="consent"><input type="checkbox" id="approve-send"> Submit this exact signed transaction on Solana devnet.</label>
 <button id="submit" disabled>Submit approved devnet transaction</button></section>
+<section>
+<h2>Recover wrapped SOL or account rent</h2>
+<p>Close an eligible token account owned by the connected wallet. Recovered SOL returns to that wallet.</p>
+<form id="cleanup-form">
+<label for="cleanup-account">Token account public address</label><input id="cleanup-account" required maxlength="44">
+<button id="cleanup-prepare-sign" type="button">Prepare cleanup approval</button>
+<button id="cleanup-sign-simulate" type="button" disabled>Sign and simulate cleanup</button>
+</form>
+<pre id="cleanup-result" aria-live="polite"></pre>
+</section>
 <section id="recovery-section" hidden><h2>Recover an operation</h2><p>Recovery checks the original signature and never resends. It can cancel a prepared operation that has not reached submission.</p>
 <button id="refresh-operations" class="secondary">Load saved operations</button><label for="operations">Operation</label><select id="operations"><option value="">Load operations first</option></select>
 <button id="recover" class="secondary" disabled>Check original operation</button></section>

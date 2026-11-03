@@ -88,7 +88,9 @@ function showExecution(result, plan) {
     ? `Buy mint: ${plan.mint}\nWallet: ${plan.payerAddress}\nDestination: ${plan.destinationTokenAccount}\nTrade budget: ${plan.tradeBudgetLamports} lamports\nTotal debit cap checked in simulation: ${plan.maxDebitLamports} lamports\nMinimum token output: ${plan.minimumTokenAmountRaw} raw units`
     : plan.action === 'sell'
       ? `Sell mint: ${plan.mint}\nWallet: ${plan.payerAddress}\nSource: ${plan.sourceTokenAccount}\nToken amount: ${plan.amountRaw} raw units\nMinimum SOL proceeds: ${plan.minimumOutputLamports} lamports\nProceeds wallet: ${plan.proceedsAddress}`
-      : `Purpose: ${plan.action === 'collect' ? 'Collect SOL' : 'Fund wallet'}\nFrom: ${payer}\nTo: ${plan.destinationAddress ?? plan.wallets[0].address}\nLamports: ${plan.wallets[0].lamports}`;
+      : plan.action === 'cleanup'
+        ? `Cleanup: ${plan.cleanupKind}\nAccount to close: ${plan.tokenAccount}\nExpected recovery: ${plan.recoveredLamports} lamports\nProceeds wallet: ${plan.proceedsAddress}`
+        : `Purpose: ${plan.action === 'collect' ? 'Collect SOL' : 'Fund wallet'}\nFrom: ${payer}\nTo: ${plan.destinationAddress ?? plan.wallets[0].address}\nLamports: ${plan.wallets[0].lamports}`;
   $('execution-summary').textContent = `${summary}\nOperation: ${execution.id}`;
   $('execution-section').hidden = false;
   render();

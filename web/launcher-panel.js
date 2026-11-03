@@ -53,17 +53,20 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
   function clearTradeApproval() {
     tradeApproval = null;
     approvalRevision++;
-    for (const actionName of ['buy', 'sell']) field(actionName + '-sign-simulate').disabled = true;
+    for (const actionName of ['buy', 'sell', 'cleanup']) field(actionName + '-sign-simulate').disabled = true;
   }
-  for (const id of ['monitor-mint', 'buy-budget', 'buy-slippage', 'buy-max-debit', 'sell-percent', 'sell-slippage']) {
+  for (const id of ['monitor-mint', 'buy-budget', 'buy-slippage', 'buy-max-debit', 'sell-percent', 'sell-slippage', 'cleanup-account']) {
     field(id).addEventListener('input', clearTradeApproval);
   }
 
   function bindTradeApproval(actionName, readInput) {
     const output = actionName + '-result';
     const signButton = field(actionName + '-sign-simulate');
-    field(actionName + '-form').addEventListener('submit', clearTradeApproval);
-    field(actionName + '-transaction').addEventListener('click', clearTradeApproval);
+    field(actionName + '-form').addEventListener('submit', event => {
+      event.preventDefault();
+      clearTradeApproval();
+    });
+    field(actionName + '-transaction')?.addEventListener('click', clearTradeApproval);
     field(actionName + '-prepare-sign').addEventListener('click', async event => {
       if (!field(actionName + '-form').reportValidity()) return;
       clearTradeApproval();
@@ -82,8 +85,11 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
         const amounts = actionName === 'buy'
           ? { tradeBudgetLamports: plan.tradeBudgetLamports, maxTotalDebitLamports: plan.maxDebitLamports,
               minimumTokenAmountRaw: plan.minimumTokenAmountRaw, destination: plan.destinationTokenAccount }
-          : { amountRaw: plan.amountRaw, minimumOutputLamports: plan.minimumOutputLamports,
-              sourceTokenAccount: plan.sourceTokenAccount, proceedsAddress: plan.proceedsAddress };
+          : actionName === 'sell'
+            ? { amountRaw: plan.amountRaw, minimumOutputLamports: plan.minimumOutputLamports,
+                sourceTokenAccount: plan.sourceTokenAccount, proceedsAddress: plan.proceedsAddress }
+            : { cleanupKind: plan.cleanupKind, accountToClose: plan.tokenAccount,
+                expectedRecoveryLamports: plan.recoveredLamports, proceedsAddress: plan.proceedsAddress };
         display(output, { wallet: plan.owner, mint: plan.mint, ...amounts,
           quotedNetworkFeeLamports: budget.feeLamports, expiresAt: new Date(expiresAt).toISOString(),
           digest: payload.review.digest });
@@ -106,6 +112,7 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
   }
   bindTradeApproval('buy', () => ({ ...buyInput(), maxDebitLamports: value('buy-max-debit') }));
   bindTradeApproval('sell', sellInput);
+  bindTradeApproval('cleanup', () => ({ owner: connectedAddress() || '', tokenAccount: value('cleanup-account') }));
 
   let timer;
   let revision = 0;

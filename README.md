@@ -280,3 +280,10 @@ exact native SOL transfer from the connected wallet. The source pays the fee
 and retains the configured 0.01 SOL reserve. Execution mode supports one
 collection source per approval and tracks the original signature for recovery.
 Wrapped SOL and token-account rent recovery are separate cleanup operations.
+
+The cleanup panel accepts a token account address and verifies ownership and
+close authority before creating a close-account review. It supports classic
+wrapped SOL accounts and empty token accounts with a supported layout, including
+Token-2022 accounts carrying only the immutable-owner extension. The instruction
+sends all recovered lamports to the connected wallet. Each close requires the wallet signature and explicit devnet submission approval. Simulation checks the
+expected recovery with a conservative fee allowance. Live testing is deferred.

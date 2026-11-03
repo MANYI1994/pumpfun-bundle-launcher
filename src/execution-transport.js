@@ -7,7 +7,7 @@ import { LIMITS, enforceFundingBudget } from './plans.js';
 import { ExecutionJournal } from './journal.js';
 import { frozenJson, requireSafe, SafetyError } from './security.js';
 const nativeFetch = globalThis.fetch.bind(globalThis);
-// Submission accepts only verified funding, buy and sell permits.
+// Submission accepts only verified execution permits.
 export class DevnetExecutionTransport {
   #rpc = new Rpc(); #proofs = new WeakMap(); #id = 0;
   get rpc() { return this.#rpc; }
@@ -26,7 +26,7 @@ export class DevnetExecutionTransport {
       requireSafe(BigInt(balance.value) >= BigInt(d.plan.maxDebitLamports) + LIMITS.feeReserveLamports,
         'INSUFFICIENT_BALANCE_OR_FEE_RESERVE');
     }
-    if (d.plan.action === 'sell') {
+    if (['sell', 'cleanup'].includes(d.plan.action)) {
       requireSafe(BigInt(balance.value) >= BigInt(fee.value) + LIMITS.feeReserveLamports,
         'INSUFFICIENT_BALANCE_OR_FEE_RESERVE');
     }
@@ -36,7 +36,7 @@ export class DevnetExecutionTransport {
       && Number.isSafeInteger(simulated.context?.slot) && simulated.context.slot >= 0, 'SIMULATION_REJECTED');
     const budget = d.plan.action === 'buy'
       ? buySimulationBudget(d.plan, String(fee.value), simulated)
-      : d.plan.action === 'sell'
+      : ['sell', 'cleanup'].includes(d.plan.action)
         ? sellSimulationBudget(d.plan, String(fee.value), simulated)
         : enforceFundingBudget(d.plan, { feeLamports: String(fee.value), balanceLamports: String(balance.value) });
     inspectExecutionPermit(permit);
