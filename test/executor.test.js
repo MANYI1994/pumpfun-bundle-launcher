@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, readFileSync, readdirSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createKeyPairSignerFromPrivateKeyBytes, signTransaction, getAddressEncoder, getBase64EncodedWireTransaction, getTransactionDecoder } from '@solana/kit';
+import { createKeyPairSignerFromPrivateKeyBytes, signTransaction, getAddressEncoder, getCompiledTransactionMessageDecoder, getBase64EncodedWireTransaction, getTransactionDecoder } from '@solana/kit';
 
 // Isolated test-process RPC replacement. No real endpoint or broadcast is used.
 let scenario;
@@ -37,6 +37,9 @@ globalThis.fetch = async (url, options) => {
         result = { value: scenario.accounts.get(request.params[0]) };
       }
       break;
+    case 'getTransaction':
+      assert.equal(request.params[0], scenario.signature);
+      result = scenario.finalizedTransaction ?? null; break;
     case 'getSignatureStatuses':
       assert.deepEqual(request.params, [[scenario.signature], { searchTransactionHistory: true }]);
       result = { context: { slot: 55 }, value: [scenario.status] }; break;
@@ -237,7 +240,14 @@ test('creation submission journals the mint and inspects finalized authorities',
     [created.review.bondingCurve, account('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P', curveData)],
   ]);
   scenario.status = { slot: 55, err: null, confirmationStatus: 'finalized' };
+  const { staticAccounts } = getCompiledTransactionMessageDecoder().decode(signed.messageBytes);
+  scenario.finalizedTransaction = { slot: 55, transaction: [scenario.wire, 'base64'], meta: {
+    err: null, fee: 5000, preBalances: [20000000, ...staticAccounts.slice(1).map(() => 0)],
+    postBalances: [17000000, ...staticAccounts.slice(1).map(() => 0)],
+    preTokenBalances: [], postTokenBalances: [],
+  } };
   const outcome = await post('/api/recover', { operationId: simulated.operationId });
+  assert.equal(outcome.balances.solChangeLamports, '-3000000');
   assert.equal(outcome.creation.creatorMatches, true);
   assert.equal(outcome.creation.mintAuthority, null);
   assert.equal(outcome.creation.freezeAuthority, null);

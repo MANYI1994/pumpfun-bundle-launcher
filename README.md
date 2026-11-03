@@ -454,3 +454,10 @@ After creation finalizes, load saved operations and check the creation record.
 sell panels and opens the buy review. The shortcut is available when the
 finalized mint inspection matches the creator and the curve is still active.
 Connect the intended buyer wallet to prepare the first buy.
+
+Checking a finalized operation also requests its finalized transaction record.
+The launcher matches the original signature and message fingerprint before
+displaying the payer's actual SOL change, network fee and token-account
+changes. Token changes are in raw units. An unavailable history or balance
+record leaves finalization intact and shows an inspection error or unavailable
+token evidence rather than inventing balances.

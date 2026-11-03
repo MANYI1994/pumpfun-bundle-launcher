@@ -1,3 +1,4 @@
+import { inspectFinalizedBalances } from './finalized-balances.js';
 import { getSignatureFromTransaction, getTransactionDecoder } from '@solana/kit';
 import { simulateLaunchBundle } from './bundle-simulation.js';
 import { buildLaunchBundle } from './bundle-transaction.js';
@@ -210,14 +211,20 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
             const result = await executor.recover(body.operationId);
             if (result.state === 'abandoned-before-submission' && ticket?.id === body.operationId) ticket = null;
             const { intent } = journal.inspect(body.operationId);
-            if (result.state === 'finalized' && intent.action === 'create') {
-              try {
-                const creation = await inspectCreatedMint(new Rpc(), intent.mintAddress, intent.payerAddress);
-                respond(200, { ...result, creation });
-              } catch (error) {
-                respond(200, { ...result, creationInspectionError: shortError(error) });
-              }
-            } else respond(200, result);
+            const details = { ...result };
+            if (result.state === 'finalized') {
+              const rpc = new Rpc();
+              const balances = inspectFinalizedBalances(rpc, intent)
+                .then(value => { details.balances = value; })
+                .catch(error => { details.balanceInspectionError = shortError(error); });
+              const creation = intent.action === 'create'
+                ? inspectCreatedMint(rpc, intent.mintAddress, intent.payerAddress)
+                    .then(value => { details.creation = value; })
+                    .catch(error => { details.creationInspectionError = shortError(error); })
+                : null;
+              await Promise.all([balances, creation]);
+            }
+            respond(200, details);
           } else if (req.url === '/api/simulate') {
             exactKeys(body, ['executionDigest']);
             requireSafe(verified, 'NO_VERIFIED_EXECUTION');

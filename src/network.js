@@ -4,7 +4,7 @@ const nativeFetch = globalThis.fetch.bind(globalThis);
 
 export const DEVNET_GENESIS = NETWORK_PROFILES.devnet.genesis;
 const MAINNET_READ_METHODS = new Set(['getGenesisHash', 'getBalance', 'getAccountInfo', 'getSignatureStatuses', 'getBlockHeight']);
-const READ_METHODS = new Set(['getGenesisHash', 'getBalance', 'getAccountInfo', 'getSignatureStatuses', 'getLatestBlockhash', 'getFeeForMessage', 'getBlockHeight', 'isBlockhashValid', 'simulateTransaction']);
+const READ_METHODS = new Set(['getGenesisHash', 'getBalance', 'getAccountInfo', 'getSignatureStatuses', 'getTransaction', 'getLatestBlockhash', 'getFeeForMessage', 'getBlockHeight', 'isBlockhashValid', 'simulateTransaction']);
 const issuedContexts = new WeakMap();
 export function assertDevnetContext(context) {
   const issued = issuedContexts.get(context);
@@ -39,6 +39,10 @@ function validateParams(method, params) {
     requireSafe(fullAccount || loaderHeader, 'INVALID_RPC_PARAMETERS');
     validAddress(params[0]);
   }
+  if (method === 'getTransaction') requireSafe(params.length === 2 &&
+    typeof params[0] === 'string' && /^[1-9A-HJ-NP-Za-km-z]{64,88}$/.test(params[0]) &&
+    canonical(params[1]) === canonical({ encoding: 'base64', commitment: 'finalized', maxSupportedTransactionVersion: 0 }),
+  'INVALID_RPC_PARAMETERS');
   if (method === 'getSignatureStatuses') requireSafe(params.length === 2 && Array.isArray(params[0]) && params[0].length > 0 && params[0].length <= 5 && params[0].every(s => typeof s === 'string' && /^[1-9A-HJ-NP-Za-km-z]{64,88}$/.test(s)) && canonical(params[1]) === canonical({ searchTransactionHistory: true }), 'INVALID_RPC_PARAMETERS');
 }
 

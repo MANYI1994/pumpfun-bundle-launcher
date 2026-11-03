@@ -203,8 +203,10 @@ $('recover').addEventListener('click', async () => {
     if ($('operations').value !== selectedOperation) return;
     if (result.state === 'abandoned-before-submission' && execution?.id === result.id) { execution = null; $('execution-section').hidden = true; }
     status(`Operation ${result.id}: ${result.state}. Automatic resubmission is disabled.`);
-    $('recovery-result').textContent = result.creation ? JSON.stringify(result.creation, null, 2)
-      : result.creationInspectionError ?? '';
+    const { creation, balances, creationInspectionError, balanceInspectionError } = result;
+    const detail = { creation, balances, creationInspectionError, balanceInspectionError };
+    $('recovery-result').textContent = Object.values(detail).some(value => value !== undefined)
+      ? JSON.stringify(detail, null, 2) : '';
     if (result.state === 'finalized' && result.creation?.creatorMatches &&
         result.creation.curveComplete === false && result.creation.mintAddress) {
       recoveredMint = { operationId: result.id, address: result.creation.mintAddress };
