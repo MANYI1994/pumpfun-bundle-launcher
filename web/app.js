@@ -1,3 +1,4 @@
+import { attachWatchlist } from "./watchlist.js";
 import { attachLauncherPanel } from "./launcher-panel.js";
 import { discoverWallets, WalletSession } from './wallet.js';
 const $ = id => document.getElementById(id);
@@ -157,3 +158,5 @@ if (validSession) {
 render();
 
 if (validSession) attachLauncherPanel({ api, showExecution, connectedAddress: () => session.address, sign: (request, digest) => session.sign(request, digest) });
+
+if (validSession) attachWatchlist({ api, connectedAddress: () => session.address });

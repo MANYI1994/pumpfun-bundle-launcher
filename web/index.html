@@ -31,6 +31,18 @@
 <pre id="balance-result" aria-live="polite"></pre>
 </section>
 <section>
+<h2>Wallet watchlist</h2>
+<p>Track up to five public addresses. Balances use the token mint selected above. Trade approvals use your connected wallet.</p>
+<form id="watch-form">
+<label for="watch-label">Wallet label</label><input id="watch-label" required maxlength="32" pattern="[a-zA-Z0-9 _\-]+">
+<label for="watch-address">Wallet public address</label><input id="watch-address" required maxlength="44">
+<div class="actions"><button>Add wallet</button><button type="button" class="secondary" id="watch-connected">Use connected address</button></div>
+</form>
+<div class="actions"><button id="watch-refresh" disabled>Refresh balances</button><button id="watch-toggle" class="secondary" disabled>Start live refresh</button></div>
+<p id="watch-status" role="status"></p>
+<div id="watch-wallets"></div>
+</section>
+<section>
 <h2>Buy review</h2>
 <p>Uses the connected wallet and selected mint. The trade budget includes Pump fees. Network fees and rent are separate.</p>
 <form id="buy-form">

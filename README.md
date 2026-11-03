@@ -287,3 +287,9 @@ wrapped SOL accounts and empty token accounts with a supported layout, including
 Token-2022 accounts carrying only the immutable-owner extension. The instruction
 sends all recovered lamports to the connected wallet. Each close requires the wallet signature and explicit devnet submission approval. Simulation checks the
 expected recovery with a conservative fee allowance. Live testing is deferred.
+
+The Wallet watchlist tracks up to five named public addresses during the current
+browser session. It reads SOL and the selected mint's associated token balances
+with manual or 15-second visible-tab refresh. A watched wallet can populate the
+balance monitor or the transfer destination. To trade from a watched address,
+select that account in your wallet extension and connect it to the launcher.

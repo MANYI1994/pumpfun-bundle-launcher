@@ -1,3 +1,11 @@
 :root{color-scheme:dark;font-family:system-ui,sans-serif;background:#101820;color:#eef4f6}*{box-sizing:border-box}body{margin:0}main{max-width:760px;margin:48px auto;padding:0 24px 48px}h1{font-size:clamp(2rem,6vw,3rem);margin:.4em 0}h2{font-size:1.2rem}p{line-height:1.6;color:#bdcdd5}section{background:#1a2731;border:1px solid #32434e;border-radius:14px;padding:24px;margin:24px 0}.badge{color:#7de2be;font-size:.8rem;letter-spacing:.12em}label{display:block;margin:18px 0 8px}input,select,textarea{font:inherit;color:inherit;background:#101820;border:1px solid #536774;border-radius:7px;padding:12px;width:100%}small{display:block;color:#a4bbc8}button{font:inherit;font-weight:650;background:#7de2be;color:#12221d;border:0;border-radius:7px;padding:12px 18px;margin-top:18px;cursor:pointer}button:disabled{opacity:.4;cursor:default}.secondary{background:#354958;color:#eef4f6}.actions{display:flex;gap:12px;flex-wrap:wrap}#account,dd{overflow-wrap:anywhere}dl{display:grid;grid-template-columns:125px 1fr;gap:14px}dt{color:#bdcdd5}dd{margin:0;font-family:ui-monospace,monospace}.consent{display:flex;align-items:flex-start;gap:10px;line-height:1.5}.consent input{width:auto;margin-top:6px}#status{border-left:3px solid #7de2be;padding:12px;background:#18282a}.footnote{font-size:.85rem}[hidden]{display:none!important}@media(max-width:500px){main{margin-top:24px}section{padding:18px}dl{grid-template-columns:1fr;gap:8px}dd{margin-bottom:10px}}
 
 pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.85rem;line-height:1.6}
+
+.watch-wallet {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #32434e;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
