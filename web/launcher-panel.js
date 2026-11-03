@@ -174,12 +174,19 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
     approvalRevision++;
     for (const actionName of ['buy', 'sell', 'cleanup']) field(actionName + '-sign-simulate').disabled = true;
   }
-  for (const id of ['monitor-mint', 'buy-budget', 'buy-slippage', 'buy-max-debit', 'sell-percent', 'sell-slippage', 'cleanup-account']) {
+  for (const id of ['monitor-mint', 'buy-budget', 'buy-slippage', 'buy-max-debit', 'sell-percent', 'sell-slippage', 'cleanup-account', 'trade-signing-route', 'swap-max-debit']) {
     field(id).addEventListener('input', clearTradeApproval);
   }
 
   function bindTradeApproval(actionName, readInput) {
     const output = actionName + '-result';
+    function signingRequest() {
+      if (['buy', 'sell'].includes(actionName) && value('trade-signing-route') === 'pumpswap') {
+        const trade = actionName === 'buy' ? buyInput() : sellInput();
+        return ['/api/pumpswap-signing-review', { ...trade, side: actionName, maxDebitLamports: value('swap-max-debit') }];
+      }
+      return ['/api/' + actionName + '-signing-review', readInput()];
+    }
     const signButton = field(actionName + '-sign-simulate');
     field(actionName + '-form').addEventListener('submit', event => {
       event.preventDefault();
@@ -192,17 +199,22 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
       clearTradeApproval();
       const current = approvalRevision;
       const button = event.currentTarget;
-      const input = readInput();
+      const [route, input] = signingRequest();
       button.disabled = true;
       field(output).textContent = 'Preparing wallet approval…';
       try {
-        const payload = await api('/api/' + actionName + '-signing-review', input);
-        if (current !== approvalRevision || JSON.stringify(input) !== JSON.stringify(readInput())) {
+        const payload = await api(route, input);
+        if (current !== approvalRevision || JSON.stringify([route, input]) !== JSON.stringify(signingRequest())) {
           throw new Error('TRADE_INPUT_CHANGED');
         }
         tradeApproval = payload;
         const { plan, budget, expiresAt } = payload.review.details;
-        const amounts = actionName === 'buy'
+        const amounts = plan.action === 'swap'
+          ? { route: plan.route, side: plan.side, inputAmountRaw: plan.inputAmountRaw, inputUnit: plan.inputUnit,
+              minimumOutputRaw: plan.minimumOutputRaw, outputUnit: plan.outputUnit,
+              sourceTokenAccount: plan.sourceTokenAccount, destination: plan.destinationTokenAccount,
+              maxNativeDebitLamports: plan.maxDebitLamports }
+          : actionName === 'buy'
           ? { tradeBudgetLamports: plan.tradeBudgetLamports, maxTotalDebitLamports: plan.maxDebitLamports,
               minimumTokenAmountRaw: plan.minimumTokenAmountRaw, destination: plan.destinationTokenAccount }
           : actionName === 'sell'
@@ -219,7 +231,8 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
     });
     signButton.addEventListener('click', async () => {
       const payload = tradeApproval;
-      if (payload?.review.details.plan.action !== actionName) return;
+      const plan = payload?.review.details.plan;
+      if (!plan || (plan.action === 'swap' ? plan.side : plan.action) !== actionName) return;
       clearTradeApproval();
       field(output).textContent = 'Awaiting wallet signature and devnet simulation…';
       try {

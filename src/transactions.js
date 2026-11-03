@@ -113,7 +113,7 @@ function issueValidatedReview(plan, planDigest, transactions, lifetime, context,
   const details = {
     version: 1, cluster: 'devnet', plan, planDigest,
     expiresAt: context ? Math.min(plan.expiresAt, context.expiresAt) : plan.expiresAt,
-    signingAllowed: false, verificationAllowed: ['fund', 'collect'].includes(plan.action) || Boolean(context && ['buy', 'sell', 'cleanup', 'create'].includes(plan.action)), productionVerified: Boolean(context), budget,
+    signingAllowed: false, verificationAllowed: ['fund', 'collect'].includes(plan.action) || Boolean(context && ['buy', 'sell', 'cleanup', 'create', 'swap'].includes(plan.action)), productionVerified: Boolean(context), budget,
     blockhash: lifetime.blockhash, lastValidBlockHeight: String(lifetime.lastValidBlockHeight),
     transactions: transactions.map(tx => ({ messageBase64: Buffer.from(tx.messageBytes).toString('base64'), requiredSigners: Object.keys(tx.signatures).sort(), fingerprint: transactionFingerprint(tx) })),
     broadcast: false,
@@ -191,6 +191,21 @@ export async function prepareCreationExecution(envelope, context, maxDebitLampor
   return { review, result };
 }
 
+export async function preparePumpSwapSigningReview(input, maxDebitLamports) {
+  const cap = raw(maxDebitLamports);
+  requireSafe(cap <= LIMITS.maxSpendLamports, 'TOTAL_DEBIT_LIMIT_EXCEEDED');
+  const { compilePumpSwapCandidate } = await import('./pumpswap-transaction.js');
+  const { candidate, tx, context } = await compilePumpSwapCandidate(input);
+  const lifetime = assertDevnetContext(context);
+  const evidence = await fundingBudgetEvidence(context, candidate.owner, Buffer.from(tx.messageBytes).toString('base64'));
+  requireSafe(BigInt(evidence.feeLamports) <= cap &&
+    BigInt(evidence.balanceLamports) >= cap + LIMITS.feeReserveLamports, 'INSUFFICIENT_BALANCE_OR_FEE_RESERVE');
+  requireSafe(Date.now() < candidate.expiresAt, 'SWAP_REVIEW_EXPIRED');
+  const plan = frozenJson({ ...candidate, action: 'swap', id: randomUUID(),
+    payerAddress: candidate.owner, maxDebitLamports: String(cap), tradeBudgetLamports: '0' });
+  return issueValidatedReview(plan, digest(plan), [tx], lifetime, context, evidence);
+}
+
 export function prepareOfflineFundingReview(envelope, confirmation, lifetime) {
   const snapshot = Object.freeze({ blockhash: lifetime.blockhash, lastValidBlockHeight: lifetime.lastValidBlockHeight });
   return issueReview(envelope, [compileFunding(envelope, confirmation, snapshot)], snapshot);
@@ -205,7 +220,7 @@ export async function prepareCurveSellReview(envelope, confirmation, lifetime, s
 export async function verifyReviewedBatch(review, confirmation, signedTransactions) {
   const issued = pendingReviews.get(review);
   requireSafe(issued && equalDigest(confirmation, review.digest) && equalDigest(review.digest, digest(review.details)), 'REVIEW_NOT_ISSUED_OR_UNAPPROVED');
-  requireSafe(review.details.verificationAllowed && ['fund', 'collect', 'buy', 'sell', 'cleanup', 'create'].includes(review.details.plan.action), 'UNVERIFIED_TRADE_SIGNING_DISABLED');
+  requireSafe(review.details.verificationAllowed && ['fund', 'collect', 'buy', 'sell', 'cleanup', 'create', 'swap'].includes(review.details.plan.action), 'UNVERIFIED_TRADE_SIGNING_DISABLED');
   const { transactions, context } = issued;
   if (context) assertDevnetContext(context);
   requireSafe(Date.now() < review.details.expiresAt, 'REVIEW_EXPIRED');
@@ -286,7 +301,7 @@ export function claimVerifiedExecution(batch, confirmation) {
   const record = verifiedExecutions.get(batch);
   requireSafe(record && batch.productionVerified && equalDigest(confirmation, batch.executionDigest), 'EXECUTION_NOT_VERIFIED_OR_APPROVED');
   assertDevnetContext(record.context);
-  requireSafe(['fund', 'buy', 'sell', 'collect', 'cleanup', 'create'].includes(record.plan.action) && record.execution.transactions.length === 1, 'EXECUTION_ROUTE_NOT_ENABLED');
+  requireSafe(['fund', 'buy', 'sell', 'collect', 'cleanup', 'create', 'swap'].includes(record.plan.action) && record.execution.transactions.length === 1, 'EXECUTION_ROUTE_NOT_ENABLED');
   verifiedExecutions.delete(batch);
   const permit = Object.freeze({ executionDigest: batch.executionDigest });
   executionPermits.set(permit, { ...record, used: false });

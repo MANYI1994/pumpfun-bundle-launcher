@@ -118,7 +118,9 @@ function showExecution(result, plan) {
   if (!result.executionEnabled || session.address !== payer) return;
   execution = { digest: result.executionDigest, id: result.operationId, ticket: null };
   $('approve-send').checked = false;
-  const summary = plan.action === 'buy'
+  const summary = plan.action === 'swap'
+    ? `PumpSwap ${plan.side}: ${plan.mint}\nWallet: ${payer}\nPool: ${plan.pool}\nSource: ${plan.sourceTokenAccount}\nDestination: ${plan.destinationTokenAccount}\nInput: ${plan.inputAmountRaw} ${plan.inputUnit}\nMinimum output: ${plan.minimumOutputRaw} ${plan.outputUnit}\nNative SOL debit cap: ${plan.maxDebitLamports} lamports`
+    : plan.action === 'buy'
     ? `Buy mint: ${plan.mint}\nWallet: ${plan.payerAddress}\nDestination: ${plan.destinationTokenAccount}\nTrade budget: ${plan.tradeBudgetLamports} lamports\nTotal debit cap checked in simulation: ${plan.maxDebitLamports} lamports\nMinimum token output: ${plan.minimumTokenAmountRaw} raw units`
     : plan.action === 'sell'
       ? `Sell mint: ${plan.mint}\nWallet: ${plan.payerAddress}\nSource: ${plan.sourceTokenAccount}\nToken amount: ${plan.amountRaw} raw units\nMinimum SOL proceeds: ${plan.minimumOutputLamports} lamports\nProceeds wallet: ${plan.proceedsAddress}`
@@ -145,7 +147,9 @@ $('simulate').addEventListener('click', async () => {
     const change = prepared.budget.conservativeNetProceedsLamports === undefined
       ? `Simulated total debit: ${prepared.budget.totalDebitLamports} lamports`
       : `Simulated net proceeds: ${prepared.budget.conservativeNetProceedsLamports} lamports`;
-    $('execution-summary').textContent += `\n${change}\nFee: ${prepared.budget.feeLamports} lamports\nRemaining: ${prepared.budget.remainingLamports} lamports`;
+    const tokenChange = prepared.budget.inputDebitedRaw === undefined ? ''
+      : `\nSimulated input: ${prepared.budget.inputDebitedRaw} ${prepared.budget.inputUnit}\nSimulated output: ${prepared.budget.outputCreditedRaw} ${prepared.budget.outputUnit}`;
+    $('execution-summary').textContent += `\n${change}${tokenChange}\nFee: ${prepared.budget.feeLamports} lamports\nRemaining: ${prepared.budget.remainingLamports} lamports`;
     status('Simulation passed. Check the transaction, then explicitly approve devnet submission.');
   } catch (e) { execution = null; status(`Simulation unavailable: ${e.message}. Use saved-operation recovery before preparing again.`); }
   finally { busy = false; render(); }

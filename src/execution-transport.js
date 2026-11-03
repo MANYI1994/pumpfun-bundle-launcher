@@ -1,5 +1,4 @@
-import { sellSimulationBudget } from './sell-simulation.js';
-import { buySimulationBudget } from './buy-simulation.js';
+import { tradeSimulationBudget } from './buy-simulation.js';
 import { getTransactionDecoder } from '@solana/kit';
 import { Rpc } from './network.js';
 import { inspectExecutionPermit, consumeExecutionPermit } from './transactions.js';
@@ -22,7 +21,7 @@ export class DevnetExecutionTransport {
     const balance = await this.#rpc.read('getBalance', [d.plan.payerAddress]);
     requireSafe(Number.isSafeInteger(fee?.value) && fee.value >= 0 && Number.isSafeInteger(balance?.value) && balance.value >= 0, 'INVALID_FEE_OR_BALANCE_RESPONSE');
     requireSafe(String(fee.value) === d.budget.feeLamports, 'FEE_CHANGED_REVIEW_REQUIRED');
-    if (['buy', 'create'].includes(d.plan.action)) {
+    if (['buy', 'create', 'swap'].includes(d.plan.action)) {
       requireSafe(BigInt(balance.value) >= BigInt(d.plan.maxDebitLamports) + LIMITS.feeReserveLamports,
         'INSUFFICIENT_BALANCE_OR_FEE_RESERVE');
     }
@@ -34,11 +33,9 @@ export class DevnetExecutionTransport {
     const simulated = await this.#rpc.read('simulateTransaction', [tx.wireBase64, { encoding: 'base64', commitment: 'confirmed', sigVerify: true, replaceRecentBlockhash: false }]);
     requireSafe(simulated?.value && Object.hasOwn(simulated.value, 'err') && simulated.value.err === null && simulated.value.replacementBlockhash == null
       && Number.isSafeInteger(simulated.context?.slot) && simulated.context.slot >= 0, 'SIMULATION_REJECTED');
-    const budget = ['buy', 'create'].includes(d.plan.action)
-      ? buySimulationBudget(d.plan, String(fee.value), simulated)
-      : ['sell', 'cleanup'].includes(d.plan.action)
-        ? sellSimulationBudget(d.plan, String(fee.value), simulated)
-        : enforceFundingBudget(d.plan, { feeLamports: String(fee.value), balanceLamports: String(balance.value) });
+    const budget = ['fund', 'collect'].includes(d.plan.action)
+      ? enforceFundingBudget(d.plan, { feeLamports: String(fee.value), balanceLamports: String(balance.value) })
+      : tradeSimulationBudget(d.plan, String(fee.value), simulated);
     inspectExecutionPermit(permit);
     const proof = frozenJson({ executionDigest: d.executionDigest, signature: tx.signature, simulationSlot: simulated.context.slot,
       expiresAt: Math.min(d.expiresAt, Date.now() + 5000), budget });

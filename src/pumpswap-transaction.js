@@ -1,6 +1,6 @@
 import {
   AccountRole, compileTransaction, getAddressEncoder, getBase58Decoder,
-  getBase64EncodedWireTransaction, getProgramDerivedAddress,
+  getBase64EncodedWireTransaction, getCompiledTransactionMessageDecoder, getProgramDerivedAddress,
 } from '@solana/kit';
 import { PUMP_SWAP } from './migration.js';
 import { Rpc, assertDevnetContext } from './network.js';
@@ -29,7 +29,7 @@ async function existingAta(rpc, owner, mint, tokenProgram) {
   return { address, amount: data.readBigUInt64LE(64) };
 }
 
-export async function buildPumpSwapTransaction(input, rpc = new Rpc()) {
+export async function compilePumpSwapCandidate(input, rpc = new Rpc()) {
   const { review } = await reviewPumpSwap(input, rpc);
   const { owner, mint, baseTokenProgram } = review;
   const [global, volume, feeConfig, eventAuthority] = await Promise.all([
@@ -71,14 +71,24 @@ export async function buildPumpSwapTransaction(input, rpc = new Rpc()) {
   const lifetime = assertDevnetContext(context);
   requireSafe(Date.now() < review.expiresAt, 'SWAP_REVIEW_EXPIRED');
   const tx = bounded(compileTransaction(message(owner, lifetime, [instruction])));
+  const { staticAccounts } = getCompiledTransactionMessageDecoder().decode(tx.messageBytes);
   const candidate = {
     ...review, instruction: isBuy ? 'buy_exact_quote_in_v2' : 'sell_v2',
     sourceTokenAccount: isBuy ? quoteUser.address : baseUser.address,
+    sourceAccountIndex: staticAccounts.indexOf(isBuy ? quoteUser.address : baseUser.address),
+    destinationAccountIndex: staticAccounts.indexOf(isBuy ? baseUser.address : quoteUser.address),
+    sourceMint: isBuy ? WSOL : mint,
+    destinationMint: isBuy ? mint : WSOL,
     destinationTokenAccount: isBuy ? baseUser.address : quoteUser.address,
     buybackFeeTokenAccount: buyback, blockhash: lifetime.blockhash,
     lastValidBlockHeight: String(lifetime.lastValidBlockHeight),
     requiredSigners: Object.keys(tx.signatures), fingerprint: transactionFingerprint(tx),
     unsignedWireBase64: getBase64EncodedWireTransaction(tx), signingAllowed: false,
   };
+  return { candidate: frozenJson(candidate), tx, context };
+}
+
+export async function buildPumpSwapTransaction(input, rpc = new Rpc()) {
+  const { candidate } = await compilePumpSwapCandidate(input, rpc);
   return frozenJson({ review: candidate, digest: digest(candidate) });
 }

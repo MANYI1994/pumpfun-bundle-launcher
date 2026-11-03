@@ -312,7 +312,7 @@ base mint supply and fee tier, and prices against effective quote reserves
 including the signed virtual-reserve adjustment. It shows LP, protocol and
 creator fee rates, estimated output and a slippage floor. The first version
 covers standard SOL-paired pools and supported mint extensions. Estimates expire
-after 15 seconds. PumpSwap transaction construction and execution are pending.
+after 15 seconds. The unsigned and execution flows are described below.
 
 [PumpSwap V2 pricing and accounts](https://github.com/pump-fun/pump-public-docs/blob/639b87fb45c3adeffa6f7c4a1bf0cb85e392bf22/docs/instructions/PUMP_SWAP_TRADE_V2.md)
 
@@ -360,5 +360,10 @@ It requires existing wallet base-token and wrapped-SOL associated accounts,
 and checks that the source holds the requested amount. Buy budgets are paid
 from wrapped SOL and sell proceeds land in the wallet's wrapped-SOL account.
 The cleanup panel handles unwrapping separately. This stage exposes the
-transaction and its fingerprint for review. PumpSwap signing and submission
-remain pending.
+transaction and its fingerprint for review. For signing, select **PumpSwap** as the buy and sell approval route and set
+a separate native SOL fee and rent cap. The wallet signs the exact reviewed
+swap. Simulation checks the actual token-account debit and credit as well as
+the native SOL debit. Execution mode allows separately approved submission
+with original-signature recovery. Nodes that omit simulation token balances
+cannot complete the check. The native SOL cap is a simulation check, while
+the swap instruction enforces its input budget and minimum token output.

@@ -64,6 +64,10 @@
 </section>
 <section>
 <h2>Buy review</h2>
+<label for="trade-signing-route">Route for buy and sell wallet approvals</label>
+<select id="trade-signing-route"><option value="curve">Bonding curve</option><option value="pumpswap">PumpSwap</option></select>
+<label for="swap-max-debit">PumpSwap native SOL fee and rent cap in lamports</label>
+<input id="swap-max-debit" maxlength="10" inputmode="numeric" pattern="[1-9][0-9]*">
 <p>Uses the connected wallet and selected mint. The trade budget includes Pump fees. Network fees and rent are separate.</p>
 <form id="buy-form">
 <label for="buy-budget">Trade budget in lamports</label><input id="buy-budget" required maxlength="10" inputmode="numeric" pattern="[1-9][0-9]*" value="1000000">
