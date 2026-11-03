@@ -31,6 +31,16 @@
 <pre id="balance-result" aria-live="polite"></pre>
 </section>
 <section>
+<h2>Buy review</h2>
+<p>Uses the connected wallet and selected mint. The trade budget includes Pump fees. Network fees and rent are separate.</p>
+<form id="buy-form">
+<label for="buy-budget">Trade budget in lamports</label><input id="buy-budget" required maxlength="10" inputmode="numeric" pattern="[1-9][0-9]*" value="1000000">
+<label for="buy-slippage">Slippage in basis points</label><input id="buy-slippage" type="number" required min="1" max="300" value="100">
+<button id="buy-review">Get buy estimate</button>
+</form>
+<pre id="buy-result" aria-live="polite"></pre>
+</section>
+<section>
 <h2>Sell review</h2>
 <p>Uses the wallet and mint above. Supply a quote for the chosen percentage. The review is for inspection.</p>
 <form id="sell-form">

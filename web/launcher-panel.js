@@ -24,6 +24,13 @@ export function attachLauncherPanel({ api, connectedAddress }) {
       creatorAddress: connectedAddress() || '',
     });
   });
+  field('buy-form').addEventListener('submit', event => {
+    event.preventDefault();
+    action(field('buy-review'), 'buy-result', '/api/buy-review', {
+      owner: connectedAddress() || '', mint: value('monitor-mint'),
+      spendLamports: value('buy-budget'), slippageBps: Number(value('buy-slippage')),
+    });
+  });
   field('sell-form').addEventListener('submit', event => {
     event.preventDefault();
     action(field('sell-review'), 'sell-result', '/api/sell-review', {

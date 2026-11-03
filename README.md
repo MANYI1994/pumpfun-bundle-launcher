@@ -221,3 +221,13 @@ token accounts. The sell panel reads the selected wallet's current associated
 token balance and uses an externally supplied quote to prepare a review.
 Creation and sell execution are pending. The funding panel keeps its own review
 and approval flow.
+
+The Buy review panel estimates an exact-budget SOL purchase for the connected
+wallet and selected mint. It reads the Pump curve and fee configuration on devnet
+and shows expected raw token units, minimum output after slippage and estimated
+trade fees. Network fees and account rent are separate. This initial quote supports
+standard incomplete SOL curves with the current account layout. The estimate expires
+after 15 seconds. Buy transaction construction, signing and submission are pending.
+
+The quote math follows the pinned Pump IDL and fee tier documentation.
+[Pump fee program](https://github.com/pump-fun/pump-public-docs/blob/639b87fb45c3adeffa6f7c4a1bf0cb85e392bf22/docs/FEE_PROGRAM_README.md)
