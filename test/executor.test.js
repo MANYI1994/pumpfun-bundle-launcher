@@ -137,8 +137,8 @@ test('processed/confirmed errors are not treated as final failures; finalized er
   assert.equal((await executor.recover(id)).state, 'failed'); assert.equal(sends(), 1);
 });
 
-for (const [action, route] of [['fund', '/api/review'], ['collect', '/api/collection-review']]) {
-  test(`execution-mode HTTP ${action} requires simulation and separate approval`, async t => {
+for (const [action, route] of [['fund', '/api/review'], ['collect', '/api/collection-review'], ['fund', '/api/batch-funding-review']]) {
+  test(`execution-mode HTTP ${route} requires simulation and separate approval`, async t => {
     const { root } = setup(t), { owner } = await approved();
     const { startWalletServer } = await import('../src/wallet-server.js');
     const server = await startWalletServer({ port: 0, journalRoot: root }); t.after(() => server.close());
@@ -150,7 +150,18 @@ for (const [action, route] of [['fund', '/api/review'], ['collect', '/api/collec
     };
     assert.equal((await post('/api/mode', {})).data.executionEnabled, true);
     assert.equal((await post('/api/submit', { executionDigest: '0'.repeat(64) })).status, 400);
-    const review = (await post(route, { payerAddress: owner.address, destinationAddress: 'So11111111111111111111111111111111111111112', lamports: '1000000' })).data;
+    const destinationAddress = 'So11111111111111111111111111111111111111112';
+    const request = route === '/api/batch-funding-review'
+      ? { payerAddress: owner.address, wallets: [
+          { id: 'first', address: destinationAddress, lamports: '1000000' },
+          { id: 'second', address: 'SysvarRent111111111111111111111111111111111', lamports: '2000000' },
+        ] }
+      : { payerAddress: owner.address, destinationAddress, lamports: '1000000' };
+    const review = (await post(route, request)).data;
+    if (request.wallets) {
+      assert.deepEqual(review.review.details.plan.wallets, request.wallets);
+      assert.equal(review.review.details.plan.totalSpendLamports, '3000000');
+    }
     assert.equal(review.review.details.plan.action, action);
     const signed = await signTransaction([owner.keyPair], getTransactionDecoder().decode(Buffer.from(review.unsignedTransactions[0], 'base64')));
     scenario.wire = getBase64EncodedWireTransaction(signed);

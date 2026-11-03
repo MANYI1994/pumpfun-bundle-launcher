@@ -44,7 +44,7 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
       if (req.method === 'GET' && assets.has(req.url)) {
         const asset = assets.get(req.url); res.writeHead(200, { 'content-type': asset.mime + '; charset=utf-8' }); res.end(asset.bytes); return;
       }
-      requireSafe(req.method === 'POST' && ['/api/review', '/api/collection-review', '/api/buy-signing-review', '/api/sell-signing-review', '/api/cleanup-signing-review', '/api/verify', '/api/cancel', '/api/mode', '/api/simulate', '/api/submit', '/api/recover', '/api/operations', ...PANEL_ROUTES].includes(req.url), 'ROUTE_NOT_ALLOWED');
+      requireSafe(req.method === 'POST' && ['/api/review', '/api/collection-review', '/api/batch-funding-review', '/api/buy-signing-review', '/api/sell-signing-review', '/api/cleanup-signing-review', '/api/verify', '/api/cancel', '/api/mode', '/api/simulate', '/api/submit', '/api/recover', '/api/operations', ...PANEL_ROUTES].includes(req.url), 'ROUTE_NOT_ALLOWED');
       const supplied = req.headers['x-launcher-session'];
       requireSafe(req.headers.origin === origin && typeof supplied === 'string' && /^[a-f0-9]{64}$/.test(supplied)
         && timingSafeEqual(Buffer.from(token), Buffer.from(supplied)), 'SESSION_OR_ORIGIN_REJECTED');
@@ -59,16 +59,17 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
       try {
         if (PANEL_ROUTES.includes(req.url)) {
           respond(200, await launcherPanel(req.url, body));
-        } else if (['/api/review', '/api/collection-review'].includes(req.url)) {
+        } else if (['/api/review', '/api/collection-review', '/api/batch-funding-review'].includes(req.url)) {
           requireSafe(!ticket, 'EXISTING_EXECUTION_REQUIRES_RECOVERY');
           active = null; verified = null; const current = ++revision;
-          exactKeys(body, ['payerAddress', 'destinationAddress', 'lamports']);
           const collecting = req.url === '/api/collection-review';
+          const batch = req.url === '/api/batch-funding-review';
+          exactKeys(body, batch ? ['payerAddress', 'wallets'] : ['payerAddress', 'destinationAddress', 'lamports']);
           const envelope = collecting
             ? collectionPlan({ destinationAddress: body.destinationAddress,
                 wallets: [{ id: 'source-wallet', address: body.payerAddress, lamports: body.lamports }] })
             : fundingPlan({ payerAddress: body.payerAddress,
-                wallets: [{ id: 'wallet-test', address: body.destinationAddress, lamports: body.lamports }] });
+                wallets: batch ? body.wallets : [{ id: 'wallet-test', address: body.destinationAddress, lamports: body.lamports }] });
           const context = await new Rpc().getBlockhashContext();
           const prepareReview = collecting ? prepareCollectionReview : prepareFundingReview;
           const review = await prepareReview(envelope, envelope.digest, context);

@@ -41,7 +41,7 @@ $('wallets').addEventListener('change', render);
 $('approve').addEventListener('change', render);
 $('approve-send').addEventListener('change', render);
 $('operations').addEventListener('change', render);
-for (const id of ['destination', 'amount', 'transfer-kind']) $(id).addEventListener('input', () => { execution = null; $('execution-section').hidden = true; reset(); });
+for (const id of ['destination', 'amount', 'transfer-kind', 'batch-recipients']) $(id).addEventListener('input', () => { execution = null; $('execution-section').hidden = true; reset(); });
 $('connect').addEventListener('click', async () => {
   busy = true; render(); status('Approve the wallet connection.');
   try { await session.connect(wallets[Number($('wallets').value) - 1]); status('Connected. Enter the recipient and test amount.'); }
@@ -49,18 +49,49 @@ $('connect').addEventListener('click', async () => {
   finally { busy = false; render(); }
 });
 $('disconnect').addEventListener('click', async () => { await session.disconnect(); status('Disconnected. Previous reviews are invalid.'); });
+$('transfer-kind').addEventListener('change', () => {
+  const batch = $('transfer-kind').value === 'batch';
+  $('single-transfer-fields').hidden = batch;
+  $('batch-transfer-fields').hidden = !batch;
+  $('destination').disabled = batch;
+  $('amount').disabled = batch;
+  $('batch-recipients').disabled = !batch;
+});
+function transferRequest() {
+  const payerAddress = session.address;
+  const kind = $('transfer-kind').value;
+  if (kind === 'batch') {
+    const rows = $('batch-recipients').value.trim().split(/\r?\n/);
+    if (rows.length > 5) throw new Error('ENTER_UP_TO_FIVE_RECIPIENTS');
+    const wallets = rows.map((row, index) => {
+      const [address, lamports, extra] = row.trim().split(/\s+/);
+      if (!address || !lamports || extra) throw new Error('ENTER_ADDRESS_AND_LAMPORTS_PER_LINE');
+      return { id: `recipient-${index + 1}`, address, lamports };
+    });
+    return ['/api/batch-funding-review', { payerAddress, wallets }];
+  }
+  const route = kind === 'collect' ? '/api/collection-review' : '/api/review';
+  return [route, { payerAddress, destinationAddress: $('destination').value, lamports: $('amount').value }];
+}
+function transferRecipients(plan) {
+  return plan.wallets.map(wallet => [plan.destinationAddress ?? wallet.address, wallet.lamports]);
+}
 $('form').addEventListener('submit', async event => {
   event.preventDefault(); reset(); const current = generation; busy = true; render(); status('Checking devnet, balance and exact transaction fee…');
   try {
     if (executionEnabled) await api('/api/cancel', {});
     execution = null; $('execution-section').hidden = true;
-    const route = $('transfer-kind').value === 'collect' ? '/api/collection-review' : '/api/review';
-    const result = await api(route, { payerAddress: session.address, destinationAddress: $('destination').value, lamports: $('amount').value });
+    const [route, request] = transferRequest();
+    const result = await api(route, request);
     if (current !== generation || result.expectedAddress !== session.address) throw new Error('WALLET_CHANGED');
     payload = result; const d = result.review.details, p = d.plan;
     const collecting = p.action === 'collect';
     const budget = collecting ? d.budget[0] : d.budget;
-    const entries = [['Network', 'Solana devnet'], ['Purpose', collecting ? 'Collect SOL' : 'Fund wallet'], ['From', result.expectedAddress], ['To', collecting ? p.destinationAddress : p.wallets[0].address], ['Lamports', p.wallets[0].lamports], ['Fee', budget.feeLamports], ['Remaining', budget.remainingLamports], ['Review hash', result.review.digest]];
+    const entries = [['Network', 'Solana devnet'], ['Purpose', collecting ? 'Collect SOL' : 'Fund wallets'],
+      ['From', result.expectedAddress],
+      ...transferRecipients(p).map(([address, amount], index) => [`Recipient ${index + 1}`, `${address} · ${amount} lamports`]),
+      ['Total lamports', p.totalSpendLamports], ['Fee', budget.feeLamports],
+      ['Remaining', budget.remainingLamports], ['Review hash', result.review.digest]];
     $('summary').replaceChildren();
     for (const [label, value] of entries) { const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = label; dd.textContent = value; $('summary').append(dt, dd); }
     $('review-section').hidden = false; status('Review the transfer, then approve signing. Nothing will be broadcast.');
@@ -91,7 +122,7 @@ function showExecution(result, plan) {
       ? `Sell mint: ${plan.mint}\nWallet: ${plan.payerAddress}\nSource: ${plan.sourceTokenAccount}\nToken amount: ${plan.amountRaw} raw units\nMinimum SOL proceeds: ${plan.minimumOutputLamports} lamports\nProceeds wallet: ${plan.proceedsAddress}`
       : plan.action === 'cleanup'
         ? `Cleanup: ${plan.cleanupKind}\nAccount to close: ${plan.tokenAccount}\nExpected recovery: ${plan.recoveredLamports} lamports\nProceeds wallet: ${plan.proceedsAddress}`
-        : `Purpose: ${plan.action === 'collect' ? 'Collect SOL' : 'Fund wallet'}\nFrom: ${payer}\nTo: ${plan.destinationAddress ?? plan.wallets[0].address}\nLamports: ${plan.wallets[0].lamports}`;
+        : `Purpose: ${plan.action === 'collect' ? 'Collect SOL' : 'Fund wallet'}\nFrom: ${payer}\nRecipients: ${transferRecipients(plan).map(([address, amount]) => `\n${address} · ${amount} lamports`).join('')}\nTotal: ${plan.totalSpendLamports} lamports`;
   $('execution-summary').textContent = `${summary}\nOperation: ${execution.id}`;
   $('execution-section').hidden = false;
   render();

@@ -293,3 +293,10 @@ browser session. It reads SOL and the selected mint's associated token balances
 with manual or 15-second visible-tab refresh. A watched wallet can populate the
 balance monitor or the transfer destination. To trade from a watched address,
 select that account in your wallet extension and connect it to the launcher.
+
+Choose **Fund up to five wallets** to send several explicit SOL amounts from
+the connected payer in one devnet transaction. Enter one public address and
+lamport amount per line. The review displays every recipient, the total,
+the transaction fee and the payer's remaining balance. The same one-SOL
+total debit limit and 0.01 SOL reserve apply to the whole batch. Submission
+and recovery use one signature for the transaction.

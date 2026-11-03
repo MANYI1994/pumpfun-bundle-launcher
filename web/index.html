@@ -71,9 +71,14 @@
 </section>
 <section><h2>2. Fund or collect SOL</h2><form id="form">
 <label for="transfer-kind">Transfer purpose</label>
-<select id="transfer-kind"><option value="fund">Fund a wallet</option><option value="collect">Collect SOL to a destination</option></select>
-<label for="destination">Recipient public address</label><input id="destination" autocomplete="off" spellcheck="false" required maxlength="44">
+<select id="transfer-kind"><option value="fund">Fund a wallet</option><option value="batch">Fund up to five wallets</option><option value="collect">Collect SOL to a destination</option></select>
+<div id="single-transfer-fields"><label for="destination">Recipient public address</label><input id="destination" autocomplete="off" spellcheck="false" required maxlength="44">
 <label for="amount">Amount in lamports <small>1 SOL = 1,000,000,000 lamports</small></label><input id="amount" inputmode="numeric" value="1000000" pattern="[1-9][0-9]*" required maxlength="10">
+</div>
+<div id="batch-transfer-fields" hidden>
+<label for="batch-recipients">One recipient per line, public address followed by lamports</label>
+<textarea id="batch-recipients" maxlength="300" rows="5" disabled></textarea>
+</div>
 <button id="prepare" disabled>Prepare review</button></form></section>
 <section id="review-section" hidden><h2>3. Review and sign</h2><p>Check the recipient, amount, network fee and remaining balance. The wallet popup must show the same transfer.</p>
 <dl id="summary"></dl><p id="expiry"></p><label class="consent"><input type="checkbox" id="approve"> I approve this exact devnet transfer for signature verification.</label>
