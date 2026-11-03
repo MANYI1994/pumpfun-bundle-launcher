@@ -24,12 +24,17 @@ export function attachLauncherPanel({ api, connectedAddress }) {
       creatorAddress: connectedAddress() || '',
     });
   });
+  const buyInput = () => ({
+    owner: connectedAddress() || '', mint: value('monitor-mint'),
+    spendLamports: value('buy-budget'), slippageBps: Number(value('buy-slippage')),
+  });
   field('buy-form').addEventListener('submit', event => {
     event.preventDefault();
-    action(field('buy-review'), 'buy-result', '/api/buy-review', {
-      owner: connectedAddress() || '', mint: value('monitor-mint'),
-      spendLamports: value('buy-budget'), slippageBps: Number(value('buy-slippage')),
-    });
+    action(field('buy-review'), 'buy-result', '/api/buy-review', buyInput());
+  });
+  field('buy-transaction').addEventListener('click', () => {
+    if (!field('buy-form').reportValidity()) return;
+    action(field('buy-transaction'), 'buy-result', '/api/buy-transaction', buyInput());
   });
   field('sell-form').addEventListener('submit', event => {
     event.preventDefault();

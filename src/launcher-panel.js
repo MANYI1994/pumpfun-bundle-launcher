@@ -1,3 +1,4 @@
+import { buildBuyTransaction } from './buy-transaction.js';
 import { reviewBuy } from './buy-review.js';
 import { getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
 import { ASSOCIATED, TOKEN } from './transactions.js';
@@ -36,9 +37,10 @@ async function balances(rpc, owner, mint) {
   return { owner, mint, lamports: String(sol.value), associatedTokenAccounts: accounts, observedAt: Date.now() };
 }
 
-export const PANEL_ROUTES = Object.freeze(['/api/metadata', '/api/create-review', '/api/balances', '/api/sell-review', '/api/buy-review']);
+export const PANEL_ROUTES = Object.freeze(['/api/metadata', '/api/create-review', '/api/balances', '/api/sell-review', '/api/buy-review', '/api/buy-transaction']);
 
 export async function launcherPanel(route, input) {
+  if (route === '/api/buy-transaction') return buildBuyTransaction(input);
   if (route === '/api/buy-review') return reviewBuy(input);
   if (route === '/api/metadata') return tokenMetadata(input);
   const rpc = new Rpc();

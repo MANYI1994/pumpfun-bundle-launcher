@@ -231,3 +231,12 @@ after 15 seconds. Buy transaction construction, signing and submission are pendi
 
 The quote math follows the pinned Pump IDL and fee tier documentation.
 [Pump fee program](https://github.com/pump-fun/pump-public-docs/blob/639b87fb45c3adeffa6f7c4a1bf0cb85e392bf22/docs/FEE_PROGRAM_README.md)
+
+The **Build unsigned buy review** button refreshes the estimate and compiles a
+Pump `buy_exact_quote_in_v3` candidate with an idempotent buyer token-account
+creation instruction. It derives the accounts from the wallet, mint and devnet
+configuration. The review includes the exact trade budget, minimum output, buyer
+signature requirement and transaction fingerprint. Network and account rent
+costs still need separate verification before execution. Curve conditions can
+change between review and execution, including crossing the migration threshold.
+Buy signing and submission remain pending.
