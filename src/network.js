@@ -1,13 +1,14 @@
+import { NETWORK_PROFILES, networkProfile } from './network-profiles.js';
 import { requireSafe, SafetyError, validAddress, canonical, frozenJson, raw } from './security.js';
 const nativeFetch = globalThis.fetch.bind(globalThis);
 
-export const DEVNET_GENESIS = 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG';
-const ALLOWED_RPC = 'api.devnet.solana.com';
+export const DEVNET_GENESIS = NETWORK_PROFILES.devnet.genesis;
+const MAINNET_READ_METHODS = new Set(['getGenesisHash', 'getBalance', 'getAccountInfo', 'getSignatureStatuses', 'getBlockHeight']);
 const READ_METHODS = new Set(['getGenesisHash', 'getBalance', 'getAccountInfo', 'getSignatureStatuses', 'getLatestBlockhash', 'getFeeForMessage', 'getBlockHeight', 'isBlockhashValid', 'simulateTransaction']);
 const issuedContexts = new WeakMap();
 export function assertDevnetContext(context) {
   const issued = issuedContexts.get(context);
-  requireSafe(issued && issued.production && Date.now() >= context.observedAt && Date.now() < context.expiresAt, 'UNVERIFIED_OR_EXPIRED_BLOCKHASH_CONTEXT');
+  requireSafe(issued && issued.production && context.cluster === 'devnet' && context.genesis === DEVNET_GENESIS && Date.now() >= context.observedAt && Date.now() < context.expiresAt, 'UNVERIFIED_OR_EXPIRED_BLOCKHASH_CONTEXT');
   return { blockhash: context.blockhash, lastValidBlockHeight: BigInt(context.lastValidBlockHeight) };
 }
 export async function fundingBudgetEvidence(context, payer, messageBase64) {
@@ -35,11 +36,15 @@ function validateParams(method, params) {
 }
 
 export class Rpc {
-  #url; #fetch; #production; #id = 0; #verified = false;
-  constructor({ url = 'https://api.devnet.solana.com', fetchImpl } = {}) {
-    let u; try { u = new URL(url); } catch { throw new SafetyError('INVALID_RPC_ENDPOINT'); }
-    requireSafe(u.protocol === 'https:' && u.hostname === ALLOWED_RPC && !u.username && !u.password && !u.port && u.pathname === '/' && !u.search && !u.hash, 'RPC_ENDPOINT_NOT_ALLOWED');
-    this.#url = u.href; this.#production = fetchImpl === undefined;
+  #url; #fetch; #production; #profile; #id = 0; #verified = false;
+  constructor({ profile = 'devnet', url, fetchImpl } = {}) {
+    this.#profile = networkProfile(profile);
+    let endpoint;
+    try { endpoint = new URL(url === undefined ? this.#profile.rpcUrl : url); }
+    catch { throw new SafetyError('INVALID_RPC_ENDPOINT'); }
+    requireSafe(endpoint.href === this.#profile.rpcUrl, 'RPC_ENDPOINT_NOT_ALLOWED');
+    this.#url = endpoint.href;
+    this.#production = fetchImpl === undefined;
     this.#fetch = fetchImpl === undefined ? nativeFetch : fetchImpl;
   }
   async #request(method, params) {
@@ -56,10 +61,13 @@ export class Rpc {
   }
   async verifyCluster() {
     const genesis = await this.#request('getGenesisHash', []);
-    requireSafe(genesis === DEVNET_GENESIS, 'WRONG_CLUSTER'); this.#verified = true;
+    requireSafe(genesis === this.#profile.genesis, 'WRONG_CLUSTER');
+    this.#verified = true;
+    return genesis;
   }
   async read(method, params = []) {
-    requireSafe(READ_METHODS.has(method), 'RPC_METHOD_NOT_ALLOWED');
+    requireSafe(READ_METHODS.has(method) &&
+      (this.#profile.executionEnabled || MAINNET_READ_METHODS.has(method)), 'RPC_METHOD_NOT_ALLOWED');
     const snapshot = frozenJson(params);
     validateParams(method, snapshot);
     if (!this.#verified) await this.verifyCluster();
@@ -72,6 +80,7 @@ export class Rpc {
     return Buffer.from(result.value.data[0], 'base64');
   }
   async getBlockhashContext({ reviewLifetimeMs = 30000 } = {}) {
+    requireSafe(this.#profile.executionEnabled, 'PROFILE_EXECUTION_DISABLED');
     requireSafe(Number.isSafeInteger(reviewLifetimeMs) && reviewLifetimeMs >= 1000 &&
       reviewLifetimeMs <= 60000, 'INVALID_REVIEW_LIFETIME');
     // Recheck cluster for each signing context, not just once per client lifetime.

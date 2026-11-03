@@ -17,6 +17,10 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
     catch (error) { field(output).textContent = error.message; }
     finally { button.disabled = false; }
   }
+  field('inspect-network').addEventListener('click', event => {
+    action(event.currentTarget, 'network-readiness-result', '/api/network-readiness',
+      { profile: value('inspect-network-profile') });
+  });
   field('check-migration').addEventListener('click', event => {
     action(event.currentTarget, 'migration-result', '/api/migration', { mint: value('monitor-mint') });
   });

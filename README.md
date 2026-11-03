@@ -421,3 +421,11 @@ Paste it into the recovery field to check devnet history after expiry or a
 restart. The check reports finalized, failed, pending and unseen transactions.
 Same-slot finalization is evidence of landing in one slot; it does not prove
 Jito accepted or atomically executed a bundle. Recovery never submits or retries.
+
+**Network readiness** checks the genesis hash and executable program accounts
+on the selected devnet or mainnet public RPC. Both endpoints and their expected
+genesis hashes are pinned. Mainnet is read-only and cannot issue a signing
+context. An executable program account is a presence check, rather than a
+verification of the deployed binary or its instruction layout. The mainnet
+journal namespace is reserved for later execution work. The existing journal
+and signing flow use devnet.

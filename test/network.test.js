@@ -92,3 +92,18 @@ test('settlement cannot attribute a finalized result to caller-swapped signature
 test('malformed finalized statuses cannot bypass explicit error/status validation', async () => {
   for (const entry of [{ confirmationStatus: 'finalized' }, { confirmationStatus: 'finalized', err: false }, { confirmationStatus: 'invented', err: null }]) await assert.rejects(reconcile({ read: async () => ({ value: [entry] }) }, ['1'.repeat(88)]), /INVALID_STATUS_RESPONSE/);
 });
+
+test('mainnet inspection pins its endpoint and cannot issue signing contexts', async () => {
+  const requests = [];
+  const rpc = new Rpc({ profile: 'mainnet', fetchImpl: async (url, options) => {
+    const request = JSON.parse(options.body);
+    requests.push({ url, method: request.method });
+    return response(request.id, '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d');
+  } });
+  await rpc.verifyCluster();
+  await assert.rejects(rpc.getBlockhashContext(), /PROFILE_EXECUTION_DISABLED/);
+  await assert.rejects(rpc.read('simulateTransaction', []), /RPC_METHOD_NOT_ALLOWED/);
+  await assert.rejects(rpc.send(), /BROADCAST_DISABLED/);
+  assert.deepEqual(requests, [{ url: 'https://api.mainnet-beta.solana.com/', method: 'getGenesisHash' }]);
+  assert.throws(() => new Rpc({ profile: 'mainnet', url: 'https://api.devnet.solana.com/' }), /RPC_ENDPOINT_NOT_ALLOWED/);
+});

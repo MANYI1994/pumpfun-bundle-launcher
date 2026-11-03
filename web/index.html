@@ -3,6 +3,14 @@
 <body><main>
 <p class="badge">SOLANA DEVNET</p><h1>Token launcher</h1>
 <p id="intro">Verify your wallet can sign the exact transfer you approve. Nothing is sent to the blockchain in signing-only mode.</p>
+<section>
+<h2>Network readiness</h2>
+<p>Check the cluster identity and program accounts. This inspection is read-only.</p>
+<label for="inspect-network-profile">Network to inspect</label>
+<select id="inspect-network-profile"><option value="devnet">Devnet</option><option value="mainnet">Mainnet</option></select>
+<button id="inspect-network" type="button" class="secondary">Check network and programs</button>
+<pre id="network-readiness-result" aria-live="polite"></pre>
+</section>
 <section><h2>1. Connect your wallet</h2><p>Use a disposable devnet account with test SOL. Your wallet keeps your private keys.</p>
 <label for="wallets">Available wallets</label><select id="wallets"><option value="">Looking for compatible wallets…</option></select>
 <div class="actions"><button id="connect" disabled>Connect wallet</button><button id="disconnect" class="secondary" disabled>Disconnect</button></div>

@@ -1,3 +1,4 @@
+import { inspectNetwork } from './network-readiness.js';
 import { checkBundleStatus } from './bundle-status.js';
 import { planLaunchBundle } from './bundle-plan.js';
 import { buildPumpSwapTransaction } from './pumpswap-transaction.js';
@@ -13,7 +14,7 @@ import { Rpc } from './network.js';
 import { exactKeys, requireSafe, validAddress, shortError } from './security.js';
 import { tokenMetadata } from './create-token.js';
 
-export const PANEL_ROUTES = Object.freeze(['/api/metadata', '/api/launch-bundle-plan', '/api/launch-bundle-status', '/api/create-verify', '/api/balances', '/api/watch-balances', '/api/migration', '/api/pumpswap-review', '/api/pumpswap-transaction', '/api/sell-review', '/api/sell-transaction', '/api/buy-review', '/api/buy-transaction']);
+export const PANEL_ROUTES = Object.freeze(['/api/metadata', '/api/network-readiness', '/api/launch-bundle-plan', '/api/launch-bundle-status', '/api/create-verify', '/api/balances', '/api/watch-balances', '/api/migration', '/api/pumpswap-review', '/api/pumpswap-transaction', '/api/sell-review', '/api/sell-transaction', '/api/buy-review', '/api/buy-transaction']);
 
 export async function launcherPanel(route, input) {
   if (route === '/api/sell-transaction') return buildSellTransaction(input);
@@ -24,6 +25,7 @@ export async function launcherPanel(route, input) {
   if (route === '/api/migration') return detectMigration(input);
   if (route === '/api/launch-bundle-status') return checkBundleStatus(input);
   if (route === '/api/launch-bundle-plan') return planLaunchBundle(input);
+  if (route === '/api/network-readiness') return inspectNetwork(input);
   if (route === '/api/metadata') return tokenMetadata(input);
   const rpc = new Rpc();
   if (route === '/api/create-verify') {
