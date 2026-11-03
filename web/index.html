@@ -29,14 +29,24 @@
 <button id="monitor-stop" class="secondary">Stop monitoring</button>
 <p>Refreshes every 15 seconds while the tab is visible. Token amounts are raw units in associated token accounts.</p>
 <pre id="balance-result" aria-live="polite"></pre>
+<button id="check-migration" class="secondary">Check selected mint’s trading route</button>
+<pre id="migration-result" aria-live="polite"></pre>
 </section>
 <section>
-<h2>Wallet watchlist</h2>
-<p>Track up to five public addresses. Balances use the token mint selected above. Trade approvals use your connected wallet.</p>
+<h2>Developer and buying wallets</h2>
+<p>Assign your developer wallet and up to five buying wallets. Import the connected account or enter a public address. Trade approvals use the account connected in your extension.</p>
 <form id="watch-form">
-<label for="watch-label">Wallet label</label><input id="watch-label" required maxlength="32" pattern="[a-zA-Z0-9 _\-]+">
+<label for="watch-role">Wallet slot</label>
+<select id="watch-role">
+<option value="Developer wallet">Developer wallet</option>
+<option value="Buying wallet 1">Buying wallet 1</option>
+<option value="Buying wallet 2">Buying wallet 2</option>
+<option value="Buying wallet 3">Buying wallet 3</option>
+<option value="Buying wallet 4">Buying wallet 4</option>
+<option value="Buying wallet 5">Buying wallet 5</option>
+</select>
 <label for="watch-address">Wallet public address</label><input id="watch-address" required maxlength="44">
-<div class="actions"><button>Add wallet</button><button type="button" class="secondary" id="watch-connected">Use connected address</button></div>
+<div class="actions"><button>Add public address</button><button type="button" class="secondary" id="watch-connected">Import connected wallet</button></div>
 </form>
 <div class="actions"><button id="watch-refresh" disabled>Refresh balances</button><button id="watch-toggle" class="secondary" disabled>Start live refresh</button></div>
 <p id="watch-status" role="status"></p>

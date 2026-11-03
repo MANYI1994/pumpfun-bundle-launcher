@@ -1,3 +1,4 @@
+import { detectMigration } from './migration.js';
 import { buildSellTransaction } from './sell-transaction.js';
 import { buildBuyTransaction } from './buy-transaction.js';
 import { reviewBuy } from './buy-review.js';
@@ -7,12 +8,13 @@ import { Rpc, assertDevnetContext } from './network.js';
 import { exactKeys, requireSafe, validAddress, shortError } from './security.js';
 import { tokenMetadata, reviewTokenCreation } from './create-token.js';
 
-export const PANEL_ROUTES = Object.freeze(['/api/metadata', '/api/create-review', '/api/balances', '/api/watch-balances', '/api/sell-review', '/api/sell-transaction', '/api/buy-review', '/api/buy-transaction']);
+export const PANEL_ROUTES = Object.freeze(['/api/metadata', '/api/create-review', '/api/balances', '/api/watch-balances', '/api/migration', '/api/sell-review', '/api/sell-transaction', '/api/buy-review', '/api/buy-transaction']);
 
 export async function launcherPanel(route, input) {
   if (route === '/api/sell-transaction') return buildSellTransaction(input);
   if (route === '/api/buy-transaction') return buildBuyTransaction(input);
   if (route === '/api/buy-review') return reviewBuy(input);
+  if (route === '/api/migration') return detectMigration(input);
   if (route === '/api/metadata') return tokenMetadata(input);
   const rpc = new Rpc();
   if (route === '/api/create-review') {
@@ -24,7 +26,7 @@ export async function launcherPanel(route, input) {
   if (route === '/api/watch-balances') {
     exactKeys(input, ['wallets', 'mint']);
     requireSafe(Array.isArray(input.wallets) && input.wallets.length > 0 &&
-      input.wallets.length <= 5, 'INVALID_WALLET_COUNT');
+      input.wallets.length <= 6, 'INVALID_WALLET_COUNT');
     const seen = new Set();
     const wallets = input.wallets.map(wallet => {
       exactKeys(wallet, ['label', 'address']);

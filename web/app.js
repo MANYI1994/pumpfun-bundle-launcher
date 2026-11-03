@@ -8,9 +8,11 @@ let wallets = [], payload = null, execution = null, executionEnabled = false, bu
 const validSession = /^[a-f0-9]{64}$/.test(token ?? '');
 const status = message => { $('status').textContent = message; };
 function reset() { generation++; payload = null; $('approve').checked = false; $('review-section').hidden = true; render(); }
+let renderWalletSlots;
 const session = new WalletSession(address => {
   execution = null; $('execution-section').hidden = true;
   reset(); $('account').textContent = address ? `Connected: ${address}` : 'No wallet connected.';
+  renderWalletSlots?.();
   if (validSession) api('/api/cancel', {}).catch(() => {});
 });
 async function api(route, body) {
@@ -190,4 +192,4 @@ render();
 
 if (validSession) attachLauncherPanel({ api, showExecution, connectedAddress: () => session.address, sign: (request, digest) => session.sign(request, digest) });
 
-if (validSession) attachWatchlist({ api, connectedAddress: () => session.address });
+if (validSession) renderWalletSlots = attachWatchlist({ api, connectedAddress: () => session.address });

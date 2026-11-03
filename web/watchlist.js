@@ -28,7 +28,7 @@ export function attachWatchlist({ api, connectedAddress }) {
       const title = document.createElement('h3');
       title.textContent = wallet.label;
       const address = document.createElement('p');
-      address.textContent = wallet.address;
+      address.textContent = wallet.address + (wallet.address === connectedAddress() ? ' · Connected signer' : '');
       const summary = document.createElement('pre');
       const result = results.get(wallet.address);
       summary.textContent = result?.error ?? (result?.balance
@@ -88,28 +88,38 @@ export function attachWatchlist({ api, connectedAddress }) {
     }
   }
 
-  field('watch-form').addEventListener('submit', event => {
-    event.preventDefault();
-    const address = field('watch-address').value.trim();
-    const label = field('watch-label').value.trim();
-    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address) || !/^[a-zA-Z0-9 _-]{1,32}$/.test(label)) {
-      status('Enter a valid public address and wallet label.');
+  function addWallet(address) {
+    const label = field('watch-role').value;
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) {
+      status('Enter a valid public wallet address.');
       return;
     }
-    if (wallets.length >= 5 || wallets.some(wallet => wallet.address === address)) {
-      status('Use up to five distinct wallet addresses.');
+    if (wallets.some(wallet => wallet.label === label)) {
+      status(label + ' is already assigned. Remove it before assigning another address.');
+      return;
+    }
+    if (wallets.some(wallet => wallet.address === address)) {
+      status('This address is already assigned to a wallet slot.');
       return;
     }
     wallets.push({ address, label });
     revision++;
-    field('watch-form').reset();
-    status('Wallet added.');
+    field('watch-address').value = '';
+    const available = Array.from(field('watch-role').options).find(option =>
+      !wallets.some(wallet => wallet.label === option.value));
+    if (available) field('watch-role').value = available.value;
+    status(label + ' added.');
     render();
+  }
+
+  field('watch-form').addEventListener('submit', event => {
+    event.preventDefault();
+    addWallet(field('watch-address').value.trim());
   });
   field('watch-connected').addEventListener('click', () => {
     const address = connectedAddress();
-    if (address) field('watch-address').value = address;
-    else status('Connect a wallet first.');
+    if (address) addWallet(address);
+    else status('Connect the account you want to import first.');
   });
   field('watch-refresh').addEventListener('click', refresh);
   field('watch-toggle').addEventListener('click', () => {
@@ -129,6 +139,7 @@ export function attachWatchlist({ api, connectedAddress }) {
     render();
   });
   render();
+  return render;
 }
 
 function formatSol(lamports) {

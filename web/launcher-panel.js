@@ -14,6 +14,9 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
     catch (error) { field(output).textContent = error.message; }
     finally { button.disabled = false; }
   }
+  field('check-migration').addEventListener('click', event => {
+    action(event.currentTarget, 'migration-result', '/api/migration', { mint: value('monitor-mint') });
+  });
   field('metadata-build').addEventListener('click', event => {
     action(event.currentTarget, 'creation-result', '/api/metadata', metadata());
   });

@@ -288,8 +288,9 @@ Token-2022 accounts carrying only the immutable-owner extension. The instruction
 sends all recovered lamports to the connected wallet. Each close requires the wallet signature and explicit devnet submission approval. Simulation checks the
 expected recovery with a conservative fee allowance. Live testing is deferred.
 
-The Wallet watchlist tracks up to five named public addresses during the current
-browser session. It reads SOL and the selected mint's associated token balances
+The dashboard has one developer wallet slot and five buying wallet slots for the
+current browser session. Add a public address or import the connected account.
+Wallet extensions retain custody of signing keys. It reads SOL and the selected mint's associated token balances
 with manual or 15-second visible-tab refresh. A watched wallet can populate the
 balance monitor or the transfer destination. To trade from a watched address,
 select that account in your wallet extension and connect it to the launcher.
@@ -300,3 +301,9 @@ lamport amount per line. The review displays every recipient, the total,
 the transaction fee and the payer's remaining balance. The same one-SOL
 total debit limit and 0.01 SOL reserve apply to the whole batch. Submission
 and recovery use one signature for the transaction.
+
+Use **Check selected mint’s trading route** to inspect the selected mint on
+devnet. The dashboard distinguishes an active SOL curve, a completed curve
+awaiting its canonical pool, and a canonical PumpSwap pool with verified program
+ownership and mint identity. It displays the pool and recorded vault addresses.
+Pool liquidity checks, quotes and swap execution are the next integration steps.
