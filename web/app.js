@@ -164,23 +164,52 @@ $('submit').addEventListener('click', async () => {
   } catch (e) { status(`Submission outcome requires recovery: ${e.message}. Operation ${approved.id}. Do not create another transfer yet.`); }
   finally { busy = false; render(); }
 });
+let recoveredMint;
+function clearRecoveredMint() {
+  recoveredMint = undefined;
+  $('use-created-mint').hidden = true;
+  $('recovery-result').textContent = '';
+}
+$('operations').addEventListener('change', clearRecoveredMint);
+$('use-created-mint').addEventListener('click', () => {
+  if (!recoveredMint || recoveredMint.operationId !== $('operations').value) return;
+  $('monitor-mint').value = recoveredMint.address;
+  $('monitor-mint').dispatchEvent(new Event('input', { bubbles: true }));
+  $('trade-signing-route').value = 'curve';
+  $('trade-signing-route').dispatchEvent(new Event('input', { bubbles: true }));
+  $('migration-result').textContent = '';
+  $('balance-result').textContent = 'Refresh balances for the selected mint.';
+  $('buy-result').textContent = '';
+  $('sell-result').textContent = '';
+  status(`Selected finalized mint ${recoveredMint.address}. Connect the buyer wallet before preparing a buy.`);
+  $('buy-heading').focus();
+});
 $('refresh-operations').addEventListener('click', async () => {
+  clearRecoveredMint();
   busy = true; render();
   try {
     const result = await api('/api/operations', {}); $('operations').replaceChildren(new Option('Choose an operation', ''));
-    for (const item of result.operations) $('operations').add(new Option(`${item.id} · ${item.state}`, item.id));
+    for (const item of result.operations) $('operations').add(new Option(`${item.action ?? 'operation'} · ${item.state} · ${item.mintAddress ?? item.id}`, item.id));
     status('Choose an operation to check. Recovery never submits transactions.');
   } catch (e) { status(`Operations unavailable: ${e.message}`); }
   finally { busy = false; render(); }
 });
 $('recover').addEventListener('click', async () => {
+  clearRecoveredMint();
+  const selectedOperation = $('operations').value;
   busy = true; render();
   try {
-    const result = await api('/api/recover', { operationId: $('operations').value });
+    const result = await api('/api/recover', { operationId: selectedOperation });
+    if ($('operations').value !== selectedOperation) return;
     if (result.state === 'abandoned-before-submission' && execution?.id === result.id) { execution = null; $('execution-section').hidden = true; }
     status(`Operation ${result.id}: ${result.state}. Automatic resubmission is disabled.`);
     $('recovery-result').textContent = result.creation ? JSON.stringify(result.creation, null, 2)
       : result.creationInspectionError ?? '';
+    if (result.state === 'finalized' && result.creation?.creatorMatches &&
+        result.creation.curveComplete === false && result.creation.mintAddress) {
+      recoveredMint = { operationId: result.id, address: result.creation.mintAddress };
+      $('use-created-mint').hidden = false;
+    }
   }
   catch (e) { status(`Recovery unavailable: ${e.message}. Keep the original operation and try checking again later.`); }
   finally { busy = false; render(); }

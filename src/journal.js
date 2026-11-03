@@ -48,7 +48,9 @@ export class ExecutionJournal {
   list() {
     return frozenJson(this.#names().filter(n => n.endsWith('.intent.json')).map(n => {
       const record = this.inspect(n.slice(0, -12));
-      return { id: record.intent.id, payerAddress: record.intent.payerAddress, signature: record.intent.signature,
+      return { id: record.intent.id, action: record.intent.action, payerAddress: record.intent.payerAddress,
+        ...(record.intent.action === 'create' ? { mintAddress: record.intent.mintAddress } : {}),
+        signature: record.intent.signature,
         state: record.outcome?.state ?? record.ack?.state ?? record.decision?.state ?? 'prepared' };
     }));
   }

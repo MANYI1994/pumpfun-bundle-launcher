@@ -94,7 +94,7 @@
 <div id="watch-wallets"></div>
 </section>
 <section>
-<h2>Buy review</h2>
+<h2 id="buy-heading" tabindex="-1">Buy review</h2>
 <label for="trade-signing-route">Route for buy and sell wallet approvals</label>
 <select id="trade-signing-route"><option value="curve">Bonding curve</option><option value="pumpswap">PumpSwap</option></select>
 <label for="swap-max-debit">PumpSwap native SOL fee and rent cap in lamports</label>
@@ -160,7 +160,8 @@
 <section id="recovery-section" hidden><h2>Recover an operation</h2><p>Recovery checks the original signature and never resends. It can cancel a prepared operation that has not reached submission.</p>
 <button id="refresh-operations" class="secondary">Load saved operations</button><label for="operations">Operation</label><select id="operations"><option value="">Load operations first</option></select>
 <button id="recover" class="secondary" disabled>Check original operation</button>
-<pre id="recovery-result" aria-live="polite"></pre></section>
+<pre id="recovery-result" aria-live="polite"></pre>
+<button id="use-created-mint" type="button" class="secondary" hidden>Use finalized mint for trading</button></section>
 <p id="status" role="status" aria-live="polite">Open the complete session URL printed by the local server.</p>
 <p id="footnote" class="footnote">Desktop wallet extensions only in this step. Mobile deep links, trading and transaction submission are not enabled.</p>
 </main></body></html>
