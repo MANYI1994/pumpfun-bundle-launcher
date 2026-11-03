@@ -4,7 +4,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { Vault } from './vault.js';
 import { hiddenInput } from './terminal.js';
-import { fundingPlan, sellPlan, validateEnvelope } from './plans.js';
+import { fundingPlan, sellPlan, collectionPlan, validateEnvelope } from './plans.js';
 import { requireSafe, shortError } from './security.js';
 import { Rpc } from './network.js';
 import { reconcile } from './settlement.js';
@@ -24,7 +24,7 @@ export async function main(args) {
   const [command, operation, ...rest] = args;
   if (!command || command === 'help') {
     console.log('Restricted devnet security rebuild. Trading and broadcasts are disabled pending protocol integration.');
-    console.log('wallet create <id> <buyer|payer|deployer|mint>\nwallet list\nplan fund <input.json> <new-output.json>\nplan sell <input.json> <new-output.json>\ninspect plan <plan.json>\nstatus signatures <signature...>');
+    console.log('wallet create <id> <buyer|payer|deployer|mint>\nwallet list\nplan fund <input.json> <new-output.json>\nplan sell <input.json> <new-output.json>\nplan collect <input.json> <new-output.json>\ninspect plan <plan.json>\nstatus signatures <signature...>');
   } else if (command === 'wallet' && operation === 'create') {
     requireSafe(rest.length === 2, 'INVALID_ARGUMENTS');
     let password = await hiddenInput('New vault passphrase (16+ characters)');
@@ -34,10 +34,10 @@ export async function main(args) {
   } else if (command === 'wallet' && operation === 'list') {
     requireSafe(rest.length === 0, 'INVALID_ARGUMENTS');
     console.log(JSON.stringify(vault().list().map(({ id, role, address }) => ({ id, role, address })), null, 2));
-  } else if (command === 'plan' && ['fund', 'sell'].includes(operation)) {
+  } else if (command === 'plan' && ['fund', 'sell', 'collect'].includes(operation)) {
     requireSafe(rest.length === 2, 'INVALID_ARGUMENTS');
     const request = readJson(rest[0]); requireSafe(!Object.hasOwn(request, 'now'), 'CALLER_CLOCK_NOT_ALLOWED');
-    const plan = operation === 'fund' ? fundingPlan(request) : sellPlan(request);
+    const plan = operation === 'fund' ? fundingPlan(request) : operation === 'collect' ? collectionPlan(request) : sellPlan(request);
     saveNew(rest[1], plan); console.log('Review-only plan saved. No signing or broadcast performed.');
   } else if (command === 'inspect' && operation === 'plan') {
     requireSafe(rest.length === 1, 'INVALID_ARGUMENTS');

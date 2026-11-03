@@ -9,6 +9,18 @@ export function enforceFundingBudget(plan, evidence) {
   requireSafe(balance >= spend + fee + LIMITS.feeReserveLamports, 'INSUFFICIENT_BALANCE_OR_FEE_RESERVE');
   return frozenJson({ feeLamports: String(fee), balanceLamports: String(balance), totalDebitLamports: String(spend + fee), remainingLamports: String(balance - spend - fee), feeReserveLamports: String(LIMITS.feeReserveLamports) });
 }
+export function enforceCollectionBudgets(plan, evidence) {
+  requireSafe(plan.action === 'collect' && Array.isArray(evidence) && evidence.length === plan.wallets.length, 'COLLECTION_EVIDENCE_MISMATCH');
+  let totalDebit = 0n;
+  const budgets = plan.wallets.map((w, i) => {
+    requireSafe(evidence[i].address === w.address, 'COLLECTION_EVIDENCE_MISMATCH');
+    const budget = enforceFundingBudget({ totalSpendLamports: w.lamports }, evidence[i]);
+    totalDebit += BigInt(budget.totalDebitLamports);
+    return { address: w.address, ...budget };
+  });
+  requireSafe(totalDebit <= LIMITS.maxSpendLamports, 'TOTAL_DEBIT_LIMIT_EXCEEDED');
+  return frozenJson(budgets);
+}
 function selection(wallets) {
   requireSafe(Array.isArray(wallets) && wallets.length > 0 && wallets.length <= LIMITS.maxWallets, 'INVALID_WALLET_COUNT');
   const seen = new Set(), ids = new Set();
@@ -49,6 +61,22 @@ export function fundingPlan({ payerAddress, wallets, tipLamports = '0', now = Da
   requireSafe(total <= LIMITS.maxSpendLamports, 'TOTAL_SPEND_LIMIT_EXCEEDED');
   return envelope({ action: 'fund', payerAddress, wallets: rows, tipLamports, totalSpendLamports: String(total), feeReserveLamports: String(LIMITS.feeReserveLamports), broadcast: false }, now);
 }
+// Native SOL only. Token sales and rent recovery must settle separately first.
+export function collectionPlan({ destinationAddress, wallets, now = Date.now() }) {
+  validAddress(destinationAddress); selection(wallets);
+  let total = 0n;
+  const rows = wallets.map(w => {
+    exactKeys(w, ['id', 'address', 'lamports']);
+    requireSafe(w.address !== destinationAddress, 'SELF_TRANSFER');
+    const amount = raw(w.lamports);
+    total += amount;
+    return { ...w };
+  });
+  requireSafe(total <= LIMITS.maxSpendLamports, 'TOTAL_SPEND_LIMIT_EXCEEDED');
+  return envelope({ action: 'collect', destinationAddress, wallets: rows,
+    totalSpendLamports: String(total), feeReserveLamports: String(LIMITS.feeReserveLamports),
+    asset: 'native-sol', tipLamports: '0', broadcast: false }, now);
+}
 export function validateEnvelope(envelope, confirmation, now = Date.now()) {
   exactKeys(envelope, ['plan', 'digest']);
   const p = envelope.plan;
@@ -58,6 +86,7 @@ export function validateEnvelope(envelope, confirmation, now = Date.now()) {
   // Re-run the full amount/recipient schema rather than trusting a self-supplied hash.
   let rebuilt;
   if (p.action === 'fund') rebuilt = fundingPlan({ payerAddress: p.payerAddress, wallets: p.wallets, tipLamports: p.tipLamports, now: p.createdAt }).plan;
+  else if (p.action === 'collect') rebuilt = collectionPlan({ destinationAddress: p.destinationAddress, wallets: p.wallets, now: p.createdAt }).plan;
   else if (p.action === 'sell') rebuilt = sellPlan({ mint: p.mint, wallets: p.wallets.map(w => ({ id: w.id, address: w.address, balanceRaw: w.balanceRaw, quotedOutputLamports: w.quotedOutputLamports })), percent: `${BigInt(p.percentageBps) / 100n}.${String(BigInt(p.percentageBps) % 100n).padStart(2, '0')}`, slippageBps: p.slippageBps, tipLamports: p.tipLamports, route: p.route, now: p.createdAt }).plan;
   else requireSafe(false, 'UNKNOWN_PLAN_ACTION');
   rebuilt = { ...rebuilt, id: p.id };

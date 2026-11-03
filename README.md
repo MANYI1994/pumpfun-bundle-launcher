@@ -77,3 +77,29 @@ Curve reviews remain unsigned and cannot be accepted by the external-verificatio
 - Only then add a separately reviewed submission implementation. Do not replace the current `Rpc.send()` refusal with raw `fetch` or copy the old execution files back.
 
 See [SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md) for the final review scope and remaining blockers. This preview fixes/removes unsafe code paths; it is not functional parity with the old launcher and is not certified risk-free.
+
+### SOL collection preview
+
+`npm start -- plan collect input.json new-plan.json` accepts:
+
+```json
+{
+  "destinationAddress": "YOUR_PUBLIC_DESTINATION_ADDRESS",
+  "wallets": [
+    {"id": "buyer-a", "address": "SOURCE_PUBLIC_ADDRESS", "lamports": "1000000"}
+  ]
+}
+```
+
+Use public addresses only. Amounts are exact native lamports, not percentages or
+an automatic sweep. Each source is the fee payer and required signer for its own
+transfer. Production review enforces a 0.01 SOL reserve per source and a 1 SOL
+aggregate debit cap including fees. Review signatures are accepted from an external
+signer only; application code does not unlock keys for signing. CLI creation saves
+a review-only plan; it neither signs nor submits it. Wait for finalized sales and
+refresh balances before planning a collection. WSOL, token account rent and creator
+fees require separate integrations and are not silently included.
+
+The full creation/buy/sell lifecycle remains under development. See
+`docs/SECURITY_REVIEW.md` for the concrete release blockers and
+`docs/PROTOCOL_INTERFACES.json` for the pinned current protocol inventory.

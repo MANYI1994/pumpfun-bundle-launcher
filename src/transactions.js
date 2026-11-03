@@ -5,7 +5,7 @@ import {
   getBase64EncodedWireTransaction, getAddressEncoder, getProgramDerivedAddress,
 } from '@solana/kit';
 import { raw, requireSafe, validAddress, digest, frozenJson, equalDigest } from './security.js';
-import { validateEnvelope, LIMITS, enforceFundingBudget } from './plans.js';
+import { validateEnvelope, LIMITS, enforceFundingBudget, enforceCollectionBudgets } from './plans.js';
 import { assertDevnetContext, fundingBudgetEvidence } from './network.js';
 
 export const SYSTEM = '11111111111111111111111111111111';
@@ -41,6 +41,33 @@ export function compileFunding(envelope, confirmation, lifetime, now = Date.now(
   requireSafe(plan.action === 'fund' && plan.tipLamports === '0', 'UNSUPPORTED_FUNDING_PLAN');
   const instructions = plan.wallets.map(w => transferInstruction(plan.payerAddress, w.address, w.lamports));
   return bounded(compileTransaction(message(plan.payerAddress, lifetime, instructions)));
+}
+
+// Each source wallet pays its own fee and signs only its own transfer.
+export function compileCollection(envelope, confirmation, lifetime, now = Date.now()) {
+  const plan = validateEnvelope(envelope, confirmation, now);
+  requireSafe(plan.action === 'collect', 'UNSUPPORTED_COLLECTION_PLAN');
+  return plan.wallets.map(w => bounded(compileTransaction(message(w.address, lifetime,
+    [transferInstruction(w.address, plan.destinationAddress, w.lamports)]))));
+}
+export function prepareOfflineCollectionReview(envelope, confirmation, lifetime) {
+  const snapshot = Object.freeze({ blockhash: lifetime.blockhash, lastValidBlockHeight: lifetime.lastValidBlockHeight });
+  return issueReview(envelope, compileCollection(envelope, confirmation, snapshot), snapshot);
+}
+export async function prepareCollectionReview(envelope, confirmation, context) {
+  const approved = frozenJson(envelope);
+  const snapshot = Object.freeze(assertDevnetContext(context));
+  const transactions = compileCollection(approved, confirmation, snapshot);
+  const evidenceRows = [];
+  for (let i = 0; i < transactions.length; i++) {
+    const w = approved.plan.wallets[i];
+    const evidence = await fundingBudgetEvidence(context, w.address,
+      Buffer.from(transactions[i].messageBytes).toString('base64'));
+    evidenceRows.push({ address: w.address, ...evidence });
+  }
+  const budgets = enforceCollectionBudgets(approved.plan, evidenceRows);
+  assertDevnetContext(context);
+  return issueReview(approved, transactions, snapshot, context, budgets);
 }
 
 // Offline candidate builder only. No broadcast path accepts these messages yet.
@@ -80,7 +107,7 @@ function issueReview(envelope, transactions, lifetime, context = null, budget = 
   const details = {
     version: 1, cluster: 'devnet', plan, planDigest: envelope.digest,
     expiresAt: context ? Math.min(plan.expiresAt, context.expiresAt) : plan.expiresAt,
-    signingAllowed: false, verificationAllowed: plan.action === 'fund', productionVerified: Boolean(context), budget,
+    signingAllowed: false, verificationAllowed: ['fund', 'collect'].includes(plan.action), productionVerified: Boolean(context), budget,
     blockhash: lifetime.blockhash, lastValidBlockHeight: String(lifetime.lastValidBlockHeight),
     transactions: transactions.map(tx => ({ messageBase64: Buffer.from(tx.messageBytes).toString('base64'), requiredSigners: Object.keys(tx.signatures).sort(), fingerprint: transactionFingerprint(tx) })),
     broadcast: false,
@@ -112,7 +139,7 @@ export async function prepareCurveSellReview(envelope, confirmation, lifetime, s
 export async function verifyReviewedBatch(review, confirmation, signedTransactions) {
   const issued = pendingReviews.get(review);
   requireSafe(issued && equalDigest(confirmation, review.digest) && equalDigest(review.digest, digest(review.details)), 'REVIEW_NOT_ISSUED_OR_UNAPPROVED');
-  requireSafe(review.details.verificationAllowed && review.details.plan.action === 'fund', 'UNVERIFIED_TRADE_SIGNING_DISABLED');
+  requireSafe(review.details.verificationAllowed && ['fund', 'collect'].includes(review.details.plan.action), 'UNVERIFIED_TRADE_SIGNING_DISABLED');
   const { transactions, context } = issued;
   if (context) assertDevnetContext(context);
   requireSafe(Date.now() < review.details.expiresAt, 'REVIEW_EXPIRED');

@@ -92,3 +92,31 @@ The suite now has 52 tests, including external signature integrity, caller mutat
 This removes application signing capabilities rather than claiming that software wrappers isolate a key from malware in the same process. The vault utility still transiently handles seed/password material for creation and authentication; compromised runtime/root/same-user code remains outside its protection. Real funds must use a separately trusted external wallet, whose actual integration remains a release blocker. Production funding review is read-only and cannot broadcast. Its budget evidence is only valid at review time and must be refreshed by any future executor.
 
 The previous passes are retained as history, not descriptions of an available local-signing API. There is no promise of zero risk or a complete token creation/trading implementation. No real keys, funded wallets, deployment changes or on-chain writes were used.
+
+## Lifecycle continuation — 2026-11-03
+
+Added native SOL collection plans and independent System Program transaction construction.
+Every selected source must sign its own transfer and pay its own network fee. There
+is exactly one explicit destination, no consolidation payer, no Jito tip and no
+implicit maximum-balance sweep. Production review reads exact-message fees and
+balances using the bound devnet context, checks every source retains 0.01 SOL, and
+caps aggregate transfers plus fees at 1 SOL. Review expiry, signer verification,
+byte matching, single-use consumption and broadcast restrictions also cover collections.
+Amounts must be chosen after sales settle; plans do not assert that a sale occurred.
+This does not close token accounts, unwrap WSOL, or collect creator fees.
+
+Protocol inventory: official pump-fun/pump-public-docs commit
+639b87fb45c3adeffa6f7c4a1bf0cb85e392bf22. PROTOCOL_INTERFACES.json records the
+hashes of the retrieved IDLs and creation/trade account/argument schemas. This is
+an interface inventory, not an audit of the on-chain program or deployment match.
+Pump's current IDL contains create/create_v2, legacy buy/sell, and newer v2 trade
+interfaces. PumpSwap has its own distinct trade accounts. The existing offline
+sell candidate is not a complete implementation of these lifecycle paths.
+
+Release blockers remain: current protocol adapters with account owner/PDA and
+mint-extension validation; authenticated live quotes and dynamic fees; creation
+and metadata upload; buy execution; PumpSwap migration detection and trading;
+external wallet integration; simulation and controlled submission; persistent
+transaction reconciliation; WSOL/rent handling; and a disposable-wallet devnet
+creation→buy→sell→collection integration run. No end-to-end on-chain lifecycle
+has been executed. Passing local tests does not remove these release blockers.
