@@ -371,8 +371,9 @@ the swap instruction enforces its input budget and minimum token output.
 The **Launch bundle rehearsal** builds an ordered devnet plan for creation and
 up to four buyer transactions. It lists the mint and creator signers, buyer
 signers, per-wallet budgets and total debit caps. The five-transaction limit
-includes creation. Each buyer's minimum output remains unset until the adapter
-can model the new curve after creation and preceding buys. The rehearsal creates
+includes creation. Each buyer gets an estimated minimum output from the initial curve settings
+and the projected reserve changes of the preceding buys. The estimate expires
+after 15 seconds and stops if a buy would complete the curve. The rehearsal creates
 a review digest. Bundle transaction construction, tips, joint simulation and
 Block Engine submission are separate work. Jito's official endpoint list covers
 mainnet and testnet. The launcher's current execution transport uses devnet.

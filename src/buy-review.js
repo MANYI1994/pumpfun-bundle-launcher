@@ -4,7 +4,7 @@ import { LIMITS } from './plans.js';
 import { digest, exactKeys, frozenJson, raw, requireSafe, validAddress } from './security.js';
 import { PUMP } from './transactions.js';
 
-const FEES_PROGRAM = 'pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ';
+export const FEES_PROGRAM = 'pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ';
 const CURVE_DISCRIMINATOR = Buffer.from([23, 183, 248, 55, 96, 216, 172, 96]);
 const FEES_DISCRIMINATOR = Buffer.from([143, 52, 146, 187, 219, 123, 76, 155]);
 const BPS = 10000n;
@@ -60,20 +60,12 @@ export async function reviewBuy(input, rpc = new Rpc()) {
   ]);
   requireSafe(Number.isSafeInteger(balance?.value) && balance.value >= 0, 'INVALID_SOL_BALANCE');
   requireSafe(BigInt(balance.value) >= spend + LIMITS.feeReserveLamports, 'INSUFFICIENT_BALANCE_OR_FEE_RESERVE');
-  const feesFor = net => ceilDiv(net * protocolBps, BPS) + ceilDiv(net * creatorBps, BPS);
-  let net = spend * BPS / (BPS + protocolBps + creatorBps);
-  const excess = net + feesFor(net) - spend;
-  if (excess > 0n) net -= excess;
-  requireSafe(net > 1n, 'BUY_ROUNDS_TO_ZERO');
-  const output = (net - 1n) * curve.virtualTokens / (curve.virtualSol + net - 1n);
-  requireSafe(output < curve.realTokens, 'BUY_WOULD_COMPLETE_CURVE');
-  const minimum = output * (BPS - BigInt(slippageBps)) / BPS;
-  requireSafe(minimum > 0n, 'BUY_ROUNDS_TO_ZERO');
+  const { output, minimum, fees } = quoteCurveBuy(curve, spend, protocolBps, creatorBps, slippageBps);
   const review = {
     action: 'buy', cluster: 'devnet', route: 'sol-bonding-curve',
     owner, mint, curveAddress, observedAt, expiresAt: observedAt + 15000,
     tradeBudgetLamports: String(spend), walletBalanceLamports: String(balance.value),
-    estimatedTradeFeesLamports: String(feesFor(net)),
+    estimatedTradeFeesLamports: String(fees),
     protocolFeeBps: String(protocolBps), creatorFeeBps: String(creatorBps),
     expectedTokenAmountRaw: String(output), minimumTokenAmountRaw: String(minimum),
     slippageBps, networkAndRentIncluded: false, broadcast: false,
@@ -95,4 +87,17 @@ export async function readSolCurve(mint, rpc) {
   const marketCap = curve.virtualSol * curve.supply / curve.virtualTokens;
   const { protocolBps, creatorBps } = selectFeeTier(feeData, marketCap);
   return { curveAddress, curve, protocolBps, creatorBps: curve.hasCreator ? creatorBps : 0n };
+}
+
+export function quoteCurveBuy(curve, spend, protocolBps, creatorBps, slippageBps) {
+  const feesFor = net => ceilDiv(net * protocolBps, BPS) + ceilDiv(net * creatorBps, BPS);
+  let net = spend * BPS / (BPS + protocolBps + creatorBps);
+  const excess = net + feesFor(net) - spend;
+  if (excess > 0n) net -= excess;
+  requireSafe(net > 1n, 'BUY_ROUNDS_TO_ZERO');
+  const output = (net - 1n) * curve.virtualTokens / (curve.virtualSol + net - 1n);
+  requireSafe(output < curve.realTokens, 'BUY_WOULD_COMPLETE_CURVE');
+  const minimum = output * (BPS - BigInt(slippageBps)) / BPS;
+  requireSafe(minimum > 0n, 'BUY_ROUNDS_TO_ZERO');
+  return { net, output, minimum, fees: feesFor(net) };
 }

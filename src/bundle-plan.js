@@ -1,10 +1,14 @@
+import { getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
+import { FEES_PROGRAM, quoteCurveBuy, selectFeeTier } from './buy-review.js';
+import { Rpc } from './network.js';
+import { PUMP } from './transactions.js';
 import { httpsField, tokenMetadata } from './create-token.js';
 import { LIMITS } from './plans.js';
 import { digest, exactKeys, frozenJson, raw, requireSafe, validAddress } from './security.js';
 
 const MAX_TRANSACTIONS = 5;
 
-export function planLaunchBundle(input) {
+function validateLaunchPlan(input) {
   exactKeys(input, ['creatorAddress', 'mintAddress', 'metadata', 'metadataUri',
     'creationMaxDebitLamports', 'buyers']);
   const creatorAddress = validAddress(input.creatorAddress);
@@ -45,5 +49,52 @@ export function planLaunchBundle(input) {
       requiredSigners: [creatorAddress, mintAddress], maxDebitLamports: String(creationCap) }, ...buys],
     tipLamports: '0', broadcast: false,
   };
-  return frozenJson({ plan, digest: digest(plan) });
+  return plan;
+}
+
+const GLOBAL_TAG = Buffer.from([167, 232, 232, 177, 200, 108, 114, 127]);
+
+export async function planLaunchBundle(input, rpc = new Rpc()) {
+  const plan = validateLaunchPlan(input);
+  const observedAt = Date.now();
+  const [[globalAddress], [feeAddress]] = await Promise.all([
+    getProgramDerivedAddress({ programAddress: PUMP, seeds: [Buffer.from('global')] }),
+    getProgramDerivedAddress({ programAddress: FEES_PROGRAM,
+      seeds: [Buffer.from('fee_config'), getAddressEncoder().encode(PUMP)] }),
+  ]);
+  const [global, feeData] = await Promise.all([
+    rpc.account(globalAddress, PUMP), rpc.account(feeAddress, FEES_PROGRAM),
+  ]);
+  requireSafe(global.length >= 451 && global.subarray(0, 8).equals(GLOBAL_TAG) &&
+    global[450] === 1, 'UNSUPPORTED_CREATION_CONFIG');
+  const curve = {
+    virtualTokens: global.readBigUInt64LE(73),
+    virtualSol: global.readBigUInt64LE(81),
+    realTokens: global.readBigUInt64LE(89),
+    supply: global.readBigUInt64LE(97),
+  };
+  requireSafe(curve.virtualTokens > curve.realTokens && curve.realTokens > 0n &&
+    curve.virtualSol > 0n && curve.supply >= curve.realTokens, 'INVALID_INITIAL_RESERVES');
+  const reserves = () => ({
+    virtualTokenReserveRaw: String(curve.virtualTokens),
+    virtualSolReserveLamports: String(curve.virtualSol),
+    realTokenReserveRaw: String(curve.realTokens),
+  });
+  const initialReserves = reserves();
+  for (const step of plan.steps.slice(1)) {
+    const marketCap = curve.virtualSol * curve.supply / curve.virtualTokens;
+    const { protocolBps, creatorBps } = selectFeeTier(feeData, marketCap);
+    const quote = quoteCurveBuy(curve, BigInt(step.spendLamports), protocolBps, creatorBps, step.slippageBps);
+    step.expectedOutputRaw = String(quote.output);
+    step.minimumOutputRaw = String(quote.minimum);
+    step.estimatedTradeFeesLamports = String(quote.fees);
+    curve.virtualTokens -= quote.output;
+    curve.realTokens -= quote.output;
+    curve.virtualSol += quote.net;
+    step.projectedReservesAfter = reserves();
+  }
+  const quoted = { ...plan, initialReserves, observedAt, expiresAt: observedAt + 15000,
+    quoteMode: 'sequential-estimate', networkAndRentIncluded: false };
+  requireSafe(Date.now() < quoted.expiresAt, 'BUNDLE_REVIEW_EXPIRED');
+  return frozenJson({ plan: quoted, digest: digest(quoted) });
 }
