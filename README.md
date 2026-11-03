@@ -414,3 +414,10 @@ RPC remains the ordinary transaction transport. Block Engine submission
 remains pending.
 
 [Jito-Solana simulation request and result types](https://github.com/jito-foundation/jito-solana/blob/master/rpc-client-api/src/bundles.rs)
+
+A verified bundle also produces a public recovery receipt with the original
+signatures and last valid block height. Copy it before closing the dashboard.
+Paste it into the recovery field to check devnet history after expiry or a
+restart. The check reports finalized, failed, pending and unseen transactions.
+Same-slot finalization is evidence of landing in one slot; it does not prove
+Jito accepted or atomically executed a bundle. Recovery never submits or retries.

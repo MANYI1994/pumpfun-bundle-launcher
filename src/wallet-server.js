@@ -1,3 +1,4 @@
+import { getSignatureFromTransaction, getTransactionDecoder } from '@solana/kit';
 import { simulateLaunchBundle } from './bundle-simulation.js';
 import { buildLaunchBundle } from './bundle-transaction.js';
 import { verifyAndMergeWireSignatures } from './create-verification.js';
@@ -90,7 +91,11 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
             if (verifiedBundle === verifiedSnapshot) verifiedBundle = undefined;
           }, Math.max(0, review.expiresAt - Date.now())).unref();
           respond(200, { verified: true, digest: bundle.digest, transactionCount: signed.length,
-            fingerprints: review.transactions.map(tx => tx.fingerprint), broadcast: false });
+            fingerprints: review.transactions.map(tx => tx.fingerprint),
+            recovery: { digest: bundle.digest, lastValidBlockHeight: review.lastValidBlockHeight,
+              signatures: signed.map(wire => getSignatureFromTransaction(
+                getTransactionDecoder().decode(Buffer.from(wire, 'base64')))) },
+            broadcast: false });
         } else if (req.url === '/api/launch-bundle-simulate') {
           exactKeys(body, ['confirmation']);
           requireSafe(verifiedBundle && body.confirmation === verifiedBundle.bundle.digest,

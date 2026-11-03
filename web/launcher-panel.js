@@ -223,6 +223,7 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
           signedTransactions: current.signatures.map(group => [...group.values()]) });
         if (revision === bundleRevision) {
           bundleReceipt = { digest: receipt.digest, expiresAt: current.review.expiresAt };
+          field('bundle-recovery').value = JSON.stringify(receipt.recovery, null, 2);
           display('bundle-result', receipt);
           renderSigningStatus();
         }
@@ -231,6 +232,15 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
       field('bundle-result').textContent = error.message;
     } finally { current.signing = false; renderSigningStatus(); }
   });
+  field('bundle-check-status').addEventListener('click', event => {
+    try {
+      const receipt = JSON.parse(value('bundle-recovery'));
+      action(event.currentTarget, 'bundle-status-result', '/api/launch-bundle-status', receipt);
+    } catch {
+      field('bundle-status-result').textContent = 'Paste the recovery JSON from a verified bundle.';
+    }
+  });
+
   bundleSimulate.addEventListener('click', async () => {
     const receipt = bundleReceipt;
     if (!receipt || receipt.busy || Date.now() >= receipt.expiresAt) return;
