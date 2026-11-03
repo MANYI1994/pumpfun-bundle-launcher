@@ -429,3 +429,11 @@ context. An executable program account is a presence check, rather than a
 verification of the deployed binary or its instruction layout. The mainnet
 journal namespace is reserved for later execution work. The existing journal
 and signing flow use devnet.
+
+Network readiness now verifies the upgradeable loader's program-to-ProgramData
+link and reads the finalized deployment slot and upgrade authority. When both
+program headers pass, it emits a digest for comparing the deployment baseline
+later. That digest covers the reported deployment metadata. Binary hashing
+and instruction compatibility checks are separate production tasks.
+
+[Upgradeable loader account layout](https://github.com/anza-xyz/solana-sdk/blob/master/loader-v3-interface/src/state.rs)

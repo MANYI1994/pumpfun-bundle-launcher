@@ -30,7 +30,14 @@ function validateParams(method, params) {
   if (method === 'isBlockhashValid') { requireSafe(params.length === 2 && canonical(params[1]) === canonical({ commitment: 'confirmed' }), 'INVALID_RPC_PARAMETERS'); validAddress(params[0]); }
   if (method === 'simulateTransaction') requireSafe(params.length === 2 && typeof params[0] === 'string' && params[0].length <= 1644 && Buffer.from(params[0], 'base64').length <= 1232 && Buffer.from(params[0], 'base64').toString('base64') === params[0] && canonical(params[1]) === canonical({ encoding: 'base64', commitment: 'confirmed', sigVerify: true, replaceRecentBlockhash: false }), 'INVALID_RPC_PARAMETERS');
   if (method === 'getAccountInfo') {
-    requireSafe(params.length === 2 && ['confirmed', 'finalized'].some(commitment => canonical(params[1]) === canonical({ encoding: 'base64', commitment })), 'INVALID_RPC_PARAMETERS'); validAddress(params[0]);
+    requireSafe(params.length === 2, 'INVALID_RPC_PARAMETERS');
+    const options = canonical(params[1]);
+    const fullAccount = ['confirmed', 'finalized'].some(commitment => options === canonical({ encoding: 'base64', commitment }));
+    const loaderHeader = options === canonical({
+      encoding: 'base64', commitment: 'finalized', dataSlice: { offset: 0, length: 45 },
+    });
+    requireSafe(fullAccount || loaderHeader, 'INVALID_RPC_PARAMETERS');
+    validAddress(params[0]);
   }
   if (method === 'getSignatureStatuses') requireSafe(params.length === 2 && Array.isArray(params[0]) && params[0].length > 0 && params[0].length <= 5 && params[0].every(s => typeof s === 'string' && /^[1-9A-HJ-NP-Za-km-z]{64,88}$/.test(s)) && canonical(params[1]) === canonical({ searchTransactionHistory: true }), 'INVALID_RPC_PARAMETERS');
 }
