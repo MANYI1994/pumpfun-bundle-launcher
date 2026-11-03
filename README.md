@@ -461,3 +461,31 @@ displaying the payer's actual SOL change, network fee and token-account
 changes. Token changes are in raw units. An unavailable history or balance
 record leaves finalization intact and shows an inspection error or unavailable
 token evidence rather than inventing balances.
+
+### Jito testnet transport smoke test
+
+The Jito CLI has a separate testnet path for two small native SOL transfers.
+It checks the public testnet genesis, obtains a tip destination from the testnet
+Block Engine, and includes the tip in the second transaction. Each transfer
+is capped at 100,000 lamports and the tip at 10,000 lamports. The input JSON
+contains `payerAddress`, two `payments` with `destinationAddress` and
+`lamports`, and `tipLamports`. Amounts are decimal strings.
+
+1. Run `npm start -- jito prepare-testnet input.json review.json`.
+2. Use an external testnet-capable signer to sign both reviewed Base64
+   transactions, in order. Save the two signed Base64 wires in a JSON array.
+3. Run `npm start -- jito submit-testnet review.json REVIEW_DIGEST signed-wires.json /absolute/private/jito-testnet-journal`.
+4. Use `npm start -- jito status-testnet BUNDLE_ID` for the Block Engine report.
+   If acknowledgement is uncertain, use `npm start -- jito recover-testnet /absolute/private/jito-testnet-journal/ATTEMPT_ID.attempt.json`
+   to look up the original testnet signatures.
+
+The launcher rebuilds and verifies both wires, rechecks fees, reserve and
+blockhash, and records the attempt before sending. The journal stores public
+signatures and receipts. Keep the same directory for replay protection.
+The testnet command handles native transfers only. Pump launch bundles still
+use the separate devnet rehearsal because Pump deployment and joint execution
+on Jito testnet have yet to be verified. The dashboard wallet signs on devnet,
+so testnet smoke testing requires a separate external signer. No live bundle
+was submitted during development.
+
+[Jito Block Engine API](https://github.com/jito-labs/jito-docs/blob/main/docs/source/lowlatencytxnsend.md)

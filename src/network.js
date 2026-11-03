@@ -3,6 +3,7 @@ import { requireSafe, SafetyError, validAddress, canonical, frozenJson, raw } fr
 const nativeFetch = globalThis.fetch.bind(globalThis);
 
 export const DEVNET_GENESIS = NETWORK_PROFILES.devnet.genesis;
+const TESTNET_BUNDLE_READS = new Set(['getLatestBlockhash', 'getFeeForMessage', 'isBlockhashValid']);
 const MAINNET_READ_METHODS = new Set(['getGenesisHash', 'getBalance', 'getAccountInfo', 'getSignatureStatuses', 'getBlockHeight']);
 const READ_METHODS = new Set(['getGenesisHash', 'getBalance', 'getAccountInfo', 'getSignatureStatuses', 'getTransaction', 'getLatestBlockhash', 'getFeeForMessage', 'getBlockHeight', 'isBlockhashValid', 'simulateTransaction']);
 const issuedContexts = new WeakMap();
@@ -78,7 +79,8 @@ export class Rpc {
   }
   async read(method, params = []) {
     requireSafe(READ_METHODS.has(method) &&
-      (this.#profile.executionEnabled || MAINNET_READ_METHODS.has(method)), 'RPC_METHOD_NOT_ALLOWED');
+      (this.#profile.executionEnabled || MAINNET_READ_METHODS.has(method) ||
+        (this.#profile.name === 'testnet' && TESTNET_BUNDLE_READS.has(method))), 'RPC_METHOD_NOT_ALLOWED');
     const snapshot = frozenJson(params);
     validateParams(method, snapshot);
     if (!this.#verified) await this.verifyCluster();

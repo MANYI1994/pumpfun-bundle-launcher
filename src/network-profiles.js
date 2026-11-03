@@ -8,6 +8,13 @@ export const NETWORK_PROFILES = Object.freeze({
     executionEnabled: true,
     journalNamespace: 'devnet',
   }),
+  testnet: Object.freeze({
+    name: 'testnet',
+    rpcUrl: 'https://api.testnet.solana.com/',
+    genesis: '4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY',
+    executionEnabled: false,
+    journalNamespace: 'jito-testnet',
+  }),
   mainnet: Object.freeze({
     name: 'mainnet',
     rpcUrl: 'https://api.mainnet-beta.solana.com/',
