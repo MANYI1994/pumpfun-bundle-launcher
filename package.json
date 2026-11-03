@@ -4,12 +4,17 @@
   "private": true,
   "type": "module",
   "description": "Restricted devnet launcher with encrypted operational wallets and reviewed transaction plans",
-  "engines": { "node": ">=24.0.0 <25" },
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
   "scripts": {
     "start": "node src/cli.js",
     "test": "node --test",
     "check": "node scripts/check-security.js",
-    "audit:dependencies": "npm audit --omit=dev --audit-level=moderate"
+    "audit:dependencies": "npm audit --omit=dev --audit-level=moderate",
+    "wallet:connect": "node src/wallet-server.js"
   },
-  "dependencies": { "@solana/kit": "8.6.0" }
+  "dependencies": {
+    "@solana/kit": "8.6.0"
+  }
 }

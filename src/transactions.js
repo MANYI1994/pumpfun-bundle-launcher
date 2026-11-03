@@ -2,7 +2,7 @@ import {
   AccountRole, createTransactionMessage, setTransactionMessageFeePayer,
   setTransactionMessageLifetimeUsingBlockhash, appendTransactionMessageInstructions,
   compileTransaction, assertIsFullySignedTransaction,
-  getBase64EncodedWireTransaction, getAddressEncoder, getProgramDerivedAddress,
+  getBase64EncodedWireTransaction, getTransactionDecoder, getAddressEncoder, getProgramDerivedAddress,
 } from '@solana/kit';
 import { raw, requireSafe, validAddress, digest, frozenJson, equalDigest } from './security.js';
 import { validateEnvelope, LIMITS, enforceFundingBudget, enforceCollectionBudgets } from './plans.js';
@@ -173,4 +173,31 @@ export async function verifyReviewedBatch(review, confirmation, signedTransactio
   if (context) assertDevnetContext(context);
   requireSafe(Date.now() < review.details.expiresAt, 'REVIEW_EXPIRED');
   return frozenJson({ transactions: output, productionVerified: Boolean(context), broadcast: false });
+}
+
+// Export only server-issued production reviews, never arbitrary caller messages.
+export function externalSigningPayload(review, confirmation, expectedAddress) {
+  const issued = pendingReviews.get(review);
+  requireSafe(issued && equalDigest(confirmation, review.digest), 'REVIEW_NOT_ISSUED_OR_UNAPPROVED');
+  requireSafe(review.details.productionVerified && review.details.verificationAllowed, 'UNVERIFIED_WALLET_REQUEST');
+  assertDevnetContext(issued.context);
+  validAddress(expectedAddress);
+  requireSafe(Date.now() < review.details.expiresAt, 'REVIEW_EXPIRED');
+  requireSafe(review.details.transactions.every(tx => tx.requiredSigners.length === 1 && tx.requiredSigners[0] === expectedAddress), 'CONNECTED_WALLET_MISMATCH');
+  return frozenJson({ review, expectedAddress, chain: 'solana:devnet',
+    unsignedTransactions: issued.transactions.map(tx => getBase64EncodedWireTransaction(tx)) });
+}
+export async function verifySignedWireBatch(review, confirmation, wires) {
+  requireSafe(Array.isArray(wires) && wires.length > 0 && wires.length <= LIMITS.maxWallets, 'INVALID_WIRE_BATCH');
+  const transactions = wires.map(wire => {
+    requireSafe(typeof wire === 'string' && wire.length <= 1644, 'INVALID_TRANSACTION_WIRE');
+    const data = Buffer.from(wire, 'base64');
+    requireSafe(data.length <= 1232 && data.toString('base64') === wire, 'INVALID_TRANSACTION_WIRE');
+    let tx;
+    try { tx = getTransactionDecoder().decode(data); }
+    catch { requireSafe(false, 'INVALID_TRANSACTION_WIRE'); }
+    requireSafe(getBase64EncodedWireTransaction(tx) === wire, 'NONCANONICAL_TRANSACTION_WIRE');
+    return tx;
+  });
+  return verifyReviewedBatch(review, confirmation, transactions);
 }

@@ -120,3 +120,53 @@ external wallet integration; simulation and controlled submission; persistent
 transaction reconciliation; WSOL/rent handling; and a disposable-wallet devnet
 creation→buy→sell→collection integration run. No end-to-end on-chain lifecycle
 has been executed. Passing local tests does not remove these release blockers.
+
+## Step 1 — external-wallet signing boundary
+
+Implemented a loopback-only browser signing screen (`npm run wallet:connect`).
+The browser discovers compatible wallets using Wallet Standard registration events,
+connects explicitly to one devnet-capable account, and invokes only the separate
+sign-only feature with `solana:devnet` and legacy wire transactions. The application
+never imports the wallet's key material. Account/feature changes invalidate the
+session; concurrent prompts are rejected; connection/signing waits are bounded.
+
+The HTTP server constructs one bounded funding transaction from public address and
+amount fields. It issues only native-transport devnet reviews after genesis,
+blockhash, fee and balance checks. `externalSigningPayload` requires the original
+issued review capability, an eligible action and the expected sole signer. It
+cannot export offline/caller-reconstructed reviews to the wallet UI. Browser checks
+bind unsigned bytes to the reviewed message and selected public key; returned bytes
+are copied, compared and Ed25519-verified. The server independently decodes the
+canonical bounded wire and runs exact-message/signer/expiry/cryptographic verification.
+A review is consumed on an HTTP verification attempt, including malformed attempts.
+No signature or signed wire is logged or persisted. The HTTP result contains only
+verification status and fingerprints, not signed transactions.
+
+HTTP boundary: fixed 127.0.0.1 bind, exact Host/Origin, random session token carried
+in a fragment and a request header, no CORS, no-cache responses, deny framing, strict
+CSP, four fixed static resources, 16 KiB JSON body limit, explicit field schemas,
+request timeouts, one pending review and serialized review/verification work.
+Tokens are process-local and are not wallet credentials. These controls do not
+isolate a compromised browser extension or another malicious same-user process.
+A review timeout does not revoke a valid signature before the chain's blockhash expires.
+
+Validation covers the HTTP review → simulated external wallet → HTTP verification
+flow using mocked devnet RPC, disposable Ed25519 signatures and the real wire codec.
+Adversarial cases include account/public-key mismatch, wrong chain, expired/forged
+review, changed request/response bytes, forged signatures, malformed/noncanonical
+wire, replay, account changes, provider rejection/timeouts, Host rebinding, cross-site
+requests, bad sessions and arbitrary fields. No new runtime dependency was added.
+A headless browser smoke run could not execute because no browser binary was present
+and the browser download returned invalid archives. An installed Phantom extension,
+hardware wallet, mobile flow and live-chain integration have not been tested.
+
+Scope: one signer and one native SOL funding transaction in the local browser UI.
+Collections retain their independent builders; collection UI, additional signers and
+all trading/submission operations remain outside this step. Remaining lifecycle
+release blockers above still apply, except that the initial external signing screen
+is now implemented and awaits real-extension acceptance testing.
+
+Interface references inspected:
+- https://docs.phantom.com/developer-powertools/wallet-standard
+- https://github.com/wallet-standard/wallet-standard/blob/master/packages/core/app/src/wallets.ts
+- https://github.com/anza-xyz/wallet-standard/blob/master/packages/core/features/src/signTransaction.ts

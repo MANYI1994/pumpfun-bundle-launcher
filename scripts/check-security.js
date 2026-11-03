@@ -28,6 +28,13 @@ function walk(dir) {
     const b = readFileSync(file); hashes[rel] = createHash('sha256').update(b).digest('hex');
     check(!/\.(vault|pem|key|log)$/.test(name), 'Secret/log artifact: ' + rel);
     check(!['blockengine.json', 'keyInfo.json', 'config.ts', 'keys.json'].includes(name), 'Legacy key/config file: ' + rel);
+    if (rel.startsWith('web/')) {
+      const s = b.toString();
+      check(!/\b(?:eval|Function)\s*\(|localStorage|sessionStorage|indexedDB|document\.cookie/.test(s), 'Unsafe browser execution/storage: ' + rel);
+      check(!/https?:\/\/|<script[^>]+src=["']https?:/i.test(s), 'Remote browser resource: ' + rel);
+      check(!/\.signAndSendTransaction\s*\(|sendRawTransaction\s*\(/.test(s), 'Browser broadcast path: ' + rel);
+      check(!/secretKey|privateKey|keypair|seedPhrase|mnemonic/.test(s), 'Browser secret handling: ' + rel);
+    }
     if (rel.startsWith('src/') && name.endsWith('.js')) {
       const s = b.toString();
       check(!/\bsignTransaction\b|\bsignReviewedBatch\b|crypto\.subtle\.sign\s*\(/.test(s), 'Local signing must stay outside application: ' + rel);

@@ -2,7 +2,7 @@
 
 **This branch is a restricted development preview, not a usable live token launcher.** The original startup dependency steals configuration files. Its execution layer has been removed. Do not run the old `main` checkout or import valuable wallets into either version.
 
-This replacement currently supports encrypted operational-wallet creation/listing, strict funding/sell plan review, offline transaction construction/signature verification tests, and read-only devnet status reconciliation. **Token creation, buying, network submission, Jito bundles, PumpSwap/Raydium execution and Flash are unavailable.** No environment variable enables them. The bonding-curve builder is an offline candidate, not a certified adapter to the currently deployed program.
+This replacement currently supports encrypted operational-wallet creation/listing, strict funding/sell plan review, offline transaction construction, a local external-wallet signing screen, exact-byte signature verification, and read-only devnet status reconciliation. **Token creation, buying, network submission, Jito bundles, PumpSwap/Raydium execution and Flash are unavailable.** No environment variable enables them. The bonding-curve builder is an offline candidate, not a certified adapter to the currently deployed program.
 
 ## Requirements and installation
 
@@ -64,14 +64,14 @@ Production funding review requires a native-transport devnet context. Explicitly
 
 Before issuing a production funding review, the client fetches the fee for the exact message and the payer balance. The transfer plus fee must fit within the one-SOL maximum debit and leave the fixed reserve intact. This is a review-time check; a future executor must check fresh conditions again before submitting.
 
-Vault paths must have trusted, non-writable ancestors owned by the current user or root. Root-owned sticky ancestors such as `/tmp` are allowed, but vault roots remain owner-only. These checks are repeated during operations. The vault remains a local creation/authentication utility, not a hardware-isolated signer: malicious code in that utility could still observe passwords/seeds while they are being handled. Do not fund preview wallets. A Phantom/hardware integration is not implemented yet.
+Vault paths must have trusted, non-writable ancestors owned by the current user or root. Root-owned sticky ancestors such as `/tmp` are allowed, but vault roots remain owner-only. These checks are repeated during operations. The vault remains a local creation/authentication utility, not a hardware-isolated signer: malicious code in that utility could still observe passwords/seeds while they are being handled. Do not fund preview wallets. A local Wallet Standard extension signing screen is available for a single devnet funding transaction. Hardware and mobile integrations have not been tested.
 
 Curve reviews remain unsigned and cannot be accepted by the external-verification path because their quotes/state are unverified. Already-produced signatures are not revoked by a review timeout. Broadcasting remains unimplemented.
 
 ## What remains before any live use
 
 - Implement and integration-test current official token creation/buy/sell and PumpSwap routing; verify current program layouts, accounts, fees, mint authority outcomes and output destinations.
-- Implement a main-wallet external signer (Phantom/hardware), explicit spend approval and a separate limited operational signer boundary.
+- Complete real-extension acceptance testing, hardware/mobile signing support and a separate limited operational signer boundary for the remaining lifecycle operations.
 - Add fresh on-chain balances/quotes, simulation, final decoded transaction review and exact-byte approval through the complete signing-to-submission flow.
 - Test transaction/bundle size, fees, compute limits, blockhash expiry, all required signatures, failed/partial/unknown settlement and restart recovery with disposable keys on a supported test environment.
 - Only then add a separately reviewed submission implementation. Do not replace the current `Rpc.send()` refusal with raw `fetch` or copy the old execution files back.
@@ -103,3 +103,51 @@ fees require separate integrations and are not silently included.
 The full creation/buy/sell lifecycle remains under development. See
 `docs/SECURITY_REVIEW.md` for the concrete release blockers and
 `docs/PROTOCOL_INTERFACES.json` for the pinned current protocol inventory.
+
+
+## Step 1: external-wallet signing test
+
+On your desktop, use Node 24 and a browser with a Wallet Standard extension such as
+Phantom. Check out this security branch, then run:
+
+```sh
+git fetch origin
+git switch security/credential-remediation-2026-11-03
+npm ci --ignore-scripts
+npm run wallet:connect
+```
+
+Open the **complete session URL** printed in the terminal. It binds to
+`127.0.0.1:8787` and contains a random access token in its fragment. The page removes
+the fragment from the address bar after loading. Keep the original URL private;
+reopen it after a refresh. No access token is written to disk.
+
+1. In your wallet, use a **disposable devnet account** and enable Solana devnet/test
+   mode. The account needs enough test SOL for the transfer, fee and 0.01 SOL reserve.
+2. Choose the wallet and click **Connect wallet**. If multiple accounts are exposed,
+   authorize just one devnet account for this test. No seed phrase or key is requested.
+3. Enter a recipient public address and a small lamport amount; click **Prepare review**.
+   The local server verifies the devnet genesis, obtains a fresh blockhash, checks
+   the exact transaction fee and balance, and issues an expiring review.
+4. Check the displayed sender, recipient, amount, fee and remaining balance. Select
+   the approval checkbox, click **Sign in wallet**, and inspect the wallet popup.
+5. The screen reports signature verification only after both browser and server
+   accept the unchanged message and expected signature. Nothing is submitted.
+   Expired or cancelled requests require a fresh review. Stop the server with Ctrl+C.
+
+The local screen has no key input, remote scripts, analytics or persistent browser
+storage. It calls only the external wallet's sign-only feature. Signed wire data
+is held transiently for verification; the HTTP result contains fingerprints rather
+than reusable signed transactions. A signature is nevertheless usable outside this
+app until its on-chain blockhash expires: keep this test account disposable.
+
+This step supports a single devnet funding transaction and one signer. It deliberately
+rejects wallets that change the reviewed message, including meta-transaction wallets.
+There is no mobile deep-link flow, hardware acceptance result, collection UI, or
+creation/buy/sell signing yet. Run this server on the same computer as the browser;
+public hosting and Codespaces/VPS forwarding are not supported by its strict origin
+checks. Do not bind it publicly or weaken these checks to expose it.
+
+Automated tests simulate the Wallet Standard provider and RPC, using disposable
+signatures. They do not establish compatibility with an installed Phantom extension
+or constitute a live devnet transaction test.
