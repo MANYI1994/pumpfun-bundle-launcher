@@ -11,7 +11,7 @@ function id(value) { requireSafe(typeof value === 'string' && ID.test(value), 'I
 function intentSchema(record) {
   exactKeys(record, ['version', 'id', 'cluster', 'genesis', 'action', 'payerAddress', 'signature', 'fingerprint', 'executionDigest', 'planDigest', 'lastValidBlockHeight', 'createdAt', 'expiresAt']);
   id(record.id); validAddress(record.payerAddress); raw(record.lastValidBlockHeight);
-  requireSafe(record.version === 1 && record.cluster === 'devnet' && record.genesis === DEVNET_GENESIS && ['fund', 'buy'].includes(record.action), 'INVALID_JOURNAL_INTENT');
+  requireSafe(record.version === 1 && record.cluster === 'devnet' && record.genesis === DEVNET_GENESIS && ['fund', 'buy', 'sell'].includes(record.action), 'INVALID_JOURNAL_INTENT');
   requireSafe(['signature', 'fingerprint', 'executionDigest', 'planDigest'].every(k => typeof record[k] === 'string') && SIGNATURE.test(record.signature) && HASH.test(record.fingerprint) && HASH.test(record.executionDigest) && HASH.test(record.planDigest), 'INVALID_JOURNAL_INTENT');
   requireSafe(Number.isSafeInteger(record.createdAt) && record.createdAt > 0 && Number.isSafeInteger(record.expiresAt) && record.expiresAt > record.createdAt, 'INVALID_JOURNAL_INTENT');
 }

@@ -49,7 +49,7 @@ test('browser rejects wrong account, mainnet, unverified, expired and unapproved
     p => { p.review.details.productionVerified = false; },
     p => { p.review.details.expiresAt = Date.now() - 1; },
     p => { p.review.details.transactions[0].requiredSigners = [recipient.address]; },
-    p => { p.review.details.plan.action = 'sell'; },
+    p => { p.review.details.plan.action = 'create'; },
     p => { p.review.details.broadcast = true; },
   ]) {
     const changed = structuredClone(payload); mutate(changed);

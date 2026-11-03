@@ -1,3 +1,4 @@
+import { sellSimulationBudget } from './sell-simulation.js';
 import { buySimulationBudget } from './buy-simulation.js';
 import { getTransactionDecoder } from '@solana/kit';
 import { Rpc } from './network.js';
@@ -6,7 +7,7 @@ import { LIMITS, enforceFundingBudget } from './plans.js';
 import { ExecutionJournal } from './journal.js';
 import { frozenJson, requireSafe, SafetyError } from './security.js';
 const nativeFetch = globalThis.fetch.bind(globalThis);
-// Submission accepts only verified funding and buy permits.
+// Submission accepts only verified funding, buy and sell permits.
 export class DevnetExecutionTransport {
   #rpc = new Rpc(); #proofs = new WeakMap(); #id = 0;
   get rpc() { return this.#rpc; }
@@ -25,13 +26,19 @@ export class DevnetExecutionTransport {
       requireSafe(BigInt(balance.value) >= BigInt(d.plan.maxDebitLamports) + LIMITS.feeReserveLamports,
         'INSUFFICIENT_BALANCE_OR_FEE_RESERVE');
     }
+    if (d.plan.action === 'sell') {
+      requireSafe(BigInt(balance.value) >= BigInt(fee.value) + LIMITS.feeReserveLamports,
+        'INSUFFICIENT_BALANCE_OR_FEE_RESERVE');
+    }
 
     const simulated = await this.#rpc.read('simulateTransaction', [tx.wireBase64, { encoding: 'base64', commitment: 'confirmed', sigVerify: true, replaceRecentBlockhash: false }]);
     requireSafe(simulated?.value && Object.hasOwn(simulated.value, 'err') && simulated.value.err === null && simulated.value.replacementBlockhash == null
       && Number.isSafeInteger(simulated.context?.slot) && simulated.context.slot >= 0, 'SIMULATION_REJECTED');
     const budget = d.plan.action === 'buy'
       ? buySimulationBudget(d.plan, String(fee.value), simulated)
-      : enforceFundingBudget(d.plan, { feeLamports: String(fee.value), balanceLamports: String(balance.value) });
+      : d.plan.action === 'sell'
+        ? sellSimulationBudget(d.plan, String(fee.value), simulated)
+        : enforceFundingBudget(d.plan, { feeLamports: String(fee.value), balanceLamports: String(balance.value) });
     inspectExecutionPermit(permit);
     const proof = frozenJson({ executionDigest: d.executionDigest, signature: tx.signature, simulationSlot: simulated.context.slot,
       expiresAt: Math.min(d.expiresAt, Date.now() + 5000), budget });

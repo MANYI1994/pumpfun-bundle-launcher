@@ -219,7 +219,7 @@ The local wallet page also includes metadata and unsigned creation review forms,
 wallet connection controls, and live devnet monitoring for SOL and associated
 token accounts. The sell panel reads the selected wallet's current associated
 token balance and uses an externally supplied quote to prepare a review.
-Creation and sell execution are pending. The funding panel keeps its own review
+Creation execution is pending. The funding panel keeps its own review
 and approval flow.
 
 The Buy review panel estimates an exact-budget SOL purchase for the connected
@@ -259,12 +259,18 @@ associated token account, the active SOL bonding curve and the Pump fee tier.
 It shows gross proceeds, estimated fees and minimum proceeds after slippage.
 The review expires after 15 seconds. It supports standard incomplete SOL curves
 and one funded, unfrozen associated token account. The legacy CLI sell planner
-continues to accept external quotes. Sell transaction construction and execution
-are pending.
+continues to accept external quotes.
 
 **Build unsigned sell review** refreshes the sell estimate and builds a Pump
 `sell_v3` candidate. It uses the selected associated token account and encodes
 the reviewed raw token amount and minimum SOL proceeds. The review displays
 the seller as the proceeds address and required signer. This flow produces
-an unsigned review. Sell signature verification, simulation and submission
-remain pending.
+an unsigned review. Use the separate wallet approval controls for simulation and submission.
+
+The Sell panel supports external wallet signing and devnet simulation for a
+fresh V3 sell review. Execution mode makes a separate submission approval
+available after simulation. The executor checks that the seller has a fee
+reserve and that the simulated net SOL gain meets the reviewed minimum after
+a conservative network fee deduction. The on-chain instruction enforces its
+minimum trade output. The net wallet gain can vary with fees and rent.
+The original signature is journaled for recovery. Live acceptance testing is deferred.

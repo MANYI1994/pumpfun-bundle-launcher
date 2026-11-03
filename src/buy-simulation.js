@@ -1,20 +1,28 @@
+import { sellSimulationBudget } from './sell-simulation.js';
 import { Rpc } from './network.js';
 import { LIMITS } from './plans.js';
 import { requireSafe } from './security.js';
 
-export async function simulateVerifiedBuy(review, verified, rpc = new Rpc()) {
+export async function simulateVerifiedTrade(review, verified, rpc = new Rpc()) {
   const plan = review.details.plan;
-  requireSafe(plan.action === 'buy' && verified.productionVerified && verified.transactions.length === 1, 'INVALID_BUY_SIMULATION');
+  requireSafe(['buy', 'sell'].includes(plan.action) && verified.productionVerified && verified.transactions.length === 1, 'INVALID_TRADE_SIMULATION');
   const { wireBase64, fingerprint } = verified.transactions[0];
   const result = await rpc.read('simulateTransaction', [wireBase64, {
     encoding: 'base64', commitment: 'confirmed', sigVerify: true, replaceRecentBlockhash: false,
   }]);
-  const budget = buySimulationBudget(plan, review.details.budget.feeLamports, result);
-  requireSafe(Date.now() < review.details.expiresAt, 'BUY_REVIEW_EXPIRED');
-  return { verified: true, simulated: true, fingerprint, conservativeDebitLamports: budget.totalDebitLamports,
-    networkFeeLamports: budget.feeLamports, broadcast: false };
+  const budget = plan.action === 'buy'
+    ? buySimulationBudget(plan, review.details.budget.feeLamports, result)
+    : sellSimulationBudget(plan, review.details.budget.feeLamports, result);
+  requireSafe(Date.now() < review.details.expiresAt, 'TRADE_REVIEW_EXPIRED');
+  return { verified: true, simulated: true, fingerprint, ...budget, networkFeeLamports: budget.feeLamports, broadcast: false };
 }
 
+
+export async function simulateVerifiedBuy(review, verified, rpc) {
+  requireSafe(review.details.plan.action === 'buy', 'INVALID_BUY_SIMULATION');
+  const result = await simulateVerifiedTrade(review, verified, rpc);
+  return { ...result, conservativeDebitLamports: result.totalDebitLamports };
+}
 
 export function buySimulationBudget(plan, expectedFeeLamports, result) {
   const value = result?.value;

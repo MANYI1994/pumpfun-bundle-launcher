@@ -113,7 +113,7 @@ function issueValidatedReview(plan, planDigest, transactions, lifetime, context,
   const details = {
     version: 1, cluster: 'devnet', plan, planDigest,
     expiresAt: context ? Math.min(plan.expiresAt, context.expiresAt) : plan.expiresAt,
-    signingAllowed: false, verificationAllowed: ['fund', 'collect', 'buy'].includes(plan.action), productionVerified: Boolean(context), budget,
+    signingAllowed: false, verificationAllowed: ['fund', 'collect'].includes(plan.action) || Boolean(context && ['buy', 'sell'].includes(plan.action)), productionVerified: Boolean(context), budget,
     blockhash: lifetime.blockhash, lastValidBlockHeight: String(lifetime.lastValidBlockHeight),
     transactions: transactions.map(tx => ({ messageBase64: Buffer.from(tx.messageBytes).toString('base64'), requiredSigners: Object.keys(tx.signatures).sort(), fingerprint: transactionFingerprint(tx) })),
     broadcast: false,
@@ -144,6 +144,18 @@ export async function prepareBuySigningReview(input, maxDebitLamports) {
   const plan = frozenJson({ ...candidate, id: randomUUID(), payerAddress: candidate.owner, maxDebitLamports });
   return issueValidatedReview(plan, digest(plan), [tx], lifetime, context, evidence);
 }
+export async function prepareSellSigningReview(input) {
+  const { compileSellCandidate } = await import('./sell-transaction.js');
+  const { candidate, tx, context } = await compileSellCandidate(input);
+  const lifetime = assertDevnetContext(context);
+  const evidence = await fundingBudgetEvidence(context, candidate.owner, Buffer.from(tx.messageBytes).toString('base64'));
+  requireSafe(BigInt(evidence.balanceLamports) >= BigInt(evidence.feeLamports) + LIMITS.feeReserveLamports,
+    'INSUFFICIENT_BALANCE_OR_FEE_RESERVE');
+  requireSafe(Date.now() < candidate.expiresAt, 'SELL_REVIEW_EXPIRED');
+  const plan = frozenJson({ ...candidate, id: randomUUID(), payerAddress: candidate.owner });
+  return issueValidatedReview(plan, digest(plan), [tx], lifetime, context, evidence);
+}
+
 export function prepareOfflineFundingReview(envelope, confirmation, lifetime) {
   const snapshot = Object.freeze({ blockhash: lifetime.blockhash, lastValidBlockHeight: lifetime.lastValidBlockHeight });
   return issueReview(envelope, [compileFunding(envelope, confirmation, snapshot)], snapshot);
@@ -158,7 +170,7 @@ export async function prepareCurveSellReview(envelope, confirmation, lifetime, s
 export async function verifyReviewedBatch(review, confirmation, signedTransactions) {
   const issued = pendingReviews.get(review);
   requireSafe(issued && equalDigest(confirmation, review.digest) && equalDigest(review.digest, digest(review.details)), 'REVIEW_NOT_ISSUED_OR_UNAPPROVED');
-  requireSafe(review.details.verificationAllowed && ['fund', 'collect', 'buy'].includes(review.details.plan.action), 'UNVERIFIED_TRADE_SIGNING_DISABLED');
+  requireSafe(review.details.verificationAllowed && ['fund', 'collect', 'buy', 'sell'].includes(review.details.plan.action), 'UNVERIFIED_TRADE_SIGNING_DISABLED');
   const { transactions, context } = issued;
   if (context) assertDevnetContext(context);
   requireSafe(Date.now() < review.details.expiresAt, 'REVIEW_EXPIRED');
@@ -230,7 +242,7 @@ export function claimVerifiedExecution(batch, confirmation) {
   const record = verifiedExecutions.get(batch);
   requireSafe(record && batch.productionVerified && equalDigest(confirmation, batch.executionDigest), 'EXECUTION_NOT_VERIFIED_OR_APPROVED');
   assertDevnetContext(record.context);
-  requireSafe(['fund', 'buy'].includes(record.plan.action) && record.execution.transactions.length === 1, 'EXECUTION_ROUTE_NOT_ENABLED');
+  requireSafe(['fund', 'buy', 'sell'].includes(record.plan.action) && record.execution.transactions.length === 1, 'EXECUTION_ROUTE_NOT_ENABLED');
   verifiedExecutions.delete(batch);
   const permit = Object.freeze({ executionDigest: batch.executionDigest });
   executionPermits.set(permit, { ...record, used: false });

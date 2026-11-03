@@ -82,7 +82,9 @@ function showExecution(result, plan) {
   $('approve-send').checked = false;
   const summary = plan.action === 'buy'
     ? `Buy mint: ${plan.mint}\nWallet: ${plan.payerAddress}\nDestination: ${plan.destinationTokenAccount}\nTrade budget: ${plan.tradeBudgetLamports} lamports\nTotal debit cap checked in simulation: ${plan.maxDebitLamports} lamports\nMinimum token output: ${plan.minimumTokenAmountRaw} raw units`
-    : `From: ${plan.payerAddress}\nTo: ${plan.wallets[0].address}\nLamports: ${plan.wallets[0].lamports}`;
+    : plan.action === 'sell'
+      ? `Sell mint: ${plan.mint}\nWallet: ${plan.payerAddress}\nSource: ${plan.sourceTokenAccount}\nToken amount: ${plan.amountRaw} raw units\nMinimum SOL proceeds: ${plan.minimumOutputLamports} lamports\nProceeds wallet: ${plan.proceedsAddress}`
+      : `From: ${plan.payerAddress}\nTo: ${plan.wallets[0].address}\nLamports: ${plan.wallets[0].lamports}`;
   $('execution-summary').textContent = `${summary}\nOperation: ${execution.id}`;
   $('execution-section').hidden = false;
   render();
@@ -98,7 +100,10 @@ $('simulate').addEventListener('click', async () => {
     const prepared = await api('/api/simulate', { executionDigest: execution.digest });
     if (!execution || current !== generation) throw new Error('WALLET_CHANGED');
     execution.ticket = prepared;
-    $('execution-summary').textContent += `\nSimulated total debit: ${prepared.budget.totalDebitLamports} lamports\nFee: ${prepared.budget.feeLamports} lamports\nRemaining: ${prepared.budget.remainingLamports} lamports`;
+    const change = prepared.budget.conservativeNetProceedsLamports === undefined
+      ? `Simulated total debit: ${prepared.budget.totalDebitLamports} lamports`
+      : `Simulated net proceeds: ${prepared.budget.conservativeNetProceedsLamports} lamports`;
+    $('execution-summary').textContent += `\n${change}\nFee: ${prepared.budget.feeLamports} lamports\nRemaining: ${prepared.budget.remainingLamports} lamports`;
     status('Simulation passed. Check the transaction, then explicitly approve devnet submission.');
   } catch (e) { execution = null; status(`Simulation unavailable: ${e.message}. Use saved-operation recovery before preparing again.`); }
   finally { busy = false; render(); }
@@ -139,7 +144,7 @@ if (validSession) {
     $('recovery-section').hidden = !executionEnabled;
     if (executionEnabled) {
       $('intro').textContent = 'Devnet execution mode: connect, review, sign, simulate and explicitly submit. Use disposable test SOL only.';
-      $('footnote').textContent = 'Desktop wallet extensions. Execution supports native SOL funding and reviewed single-wallet Pump buys.';
+      $('footnote').textContent = 'Desktop wallet extensions. Execution supports native SOL funding and reviewed single-wallet Pump buys and sells.';
     }
   }).catch(() => status('Session unavailable. Reopen the complete local session URL.'));
 }
