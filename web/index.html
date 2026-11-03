@@ -33,6 +33,8 @@
 <label for="token-mint">Fresh mint public address</label><input id="token-mint" required maxlength="44">
 <label for="creation-max-debit">Maximum creation debit in lamports, including fees and rent</label>
 <input id="creation-max-debit" required maxlength="10" inputmode="numeric" pattern="[1-9][0-9]*">
+<button id="check-metadata-publication" type="button" class="secondary">Check published IPFS files</button>
+<pre id="metadata-publication-result" aria-live="polite"></pre>
 <button id="creation-review">Prepare unsigned creation review</button>
 </form>
 <p>Connect the creator to prepare the review. Sign with the mint account first, then reconnect the creator to sign and approve submission. The server simulates after both signatures arrive.</p>

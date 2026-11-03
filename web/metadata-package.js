@@ -25,10 +25,14 @@ function varint(value) {
   return Uint8Array.from(bytes);
 }
 
-async function rawBlock(data) {
+export async function rawContentId(data) {
   const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', data));
   const cid = Uint8Array.of(1, 0x55, 0x12, 32, ...hash);
-  const text = 'b' + base32(cid);
+  return { cid, text: 'b' + base32(cid) };
+}
+
+async function rawBlock(data) {
+  const { cid, text } = await rawContentId(data);
   // DAG-CBOR CARv1 header: { roots: [CID], version: 1 }.
   const header = Uint8Array.of(0xa2, 0x65, ...utf8.encode('roots'), 0x81,
     0xd8, 42, 0x58, cid.length + 1, 0, ...cid, 0x67, ...utf8.encode('version'), 1);

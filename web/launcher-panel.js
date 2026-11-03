@@ -67,6 +67,29 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
     if (publication) downloadCar(publication.metadataBlock, 'token-metadata.car');
   });
 
+  let metadataCheckRevision = 0;
+  field('creation-form').addEventListener('input', () => {
+    metadataCheckRevision++;
+    field('metadata-publication-result').textContent = '';
+  });
+  field('metadata-package').addEventListener('click', () => {
+    metadataCheckRevision++;
+    field('metadata-publication-result').textContent = '';
+  });
+  field('check-metadata-publication').addEventListener('click', async event => {
+    const current = ++metadataCheckRevision;
+    const button = event.currentTarget;
+    const output = field('metadata-publication-result');
+    button.disabled = true;
+    output.textContent = 'Checking published image and metadata…';
+    try {
+      const result = await api('/api/metadata-publication', { metadata: metadata(), metadataUri: value('token-uri') });
+      if (current === metadataCheckRevision) display('metadata-publication-result', result);
+    } catch (error) {
+      if (current === metadataCheckRevision) output.textContent = error.message;
+    } finally { button.disabled = false; }
+  });
+
   let creation;
   let creationRevision = 0;
   const creationSign = field('creation-sign');
