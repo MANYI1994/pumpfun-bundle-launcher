@@ -91,7 +91,7 @@ export class WalletSession {
     check(wallet && account && supported(wallet) && accountSupported(account), 'WALLET_NOT_CONNECTED');
     check(wallet.accounts?.includes(account) && account.address === data.expectedAddress, 'CONNECTED_WALLET_MISMATCH');
     check(data.chain === CHAIN && details?.cluster === 'devnet' && details.productionVerified === true
-      && details.verificationAllowed === true && ['fund', 'collect'].includes(details.plan?.action)
+      && details.verificationAllowed === true && ['fund', 'collect', 'buy'].includes(details.plan?.action)
       && details.broadcast === false, 'UNVERIFIED_WALLET_REQUEST');
     check(typeof confirmation === 'string' && /^[a-f0-9]{64}$/.test(confirmation) && confirmation === data.review.digest, 'REVIEW_NOT_APPROVED');
     check(Date.now() < details.expiresAt && details.expiresAt <= Date.now() + 60000, 'REVIEW_EXPIRED');

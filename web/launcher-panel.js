@@ -1,4 +1,4 @@
-export function attachLauncherPanel({ api, connectedAddress }) {
+export function attachLauncherPanel({ api, connectedAddress, sign }) {
   const field = id => document.getElementById(id);
   const value = id => field(id).value.trim();
   const metadata = () => ({
@@ -35,6 +35,48 @@ export function attachLauncherPanel({ api, connectedAddress }) {
   field('buy-transaction').addEventListener('click', () => {
     if (!field('buy-form').reportValidity()) return;
     action(field('buy-transaction'), 'buy-result', '/api/buy-transaction', buyInput());
+  });
+  let buyApproval = null;
+  function clearBuyApproval() {
+    buyApproval = null;
+    field('buy-sign-simulate').disabled = true;
+  }
+  for (const id of ['monitor-mint', 'buy-budget', 'buy-slippage', 'buy-max-debit']) {
+    field(id).addEventListener('input', clearBuyApproval);
+  }
+  field('buy-review').addEventListener('click', clearBuyApproval);
+  field('buy-transaction').addEventListener('click', clearBuyApproval);
+  field('buy-prepare-sign').addEventListener('click', async event => {
+    clearBuyApproval();
+    const button = event.currentTarget;
+    const input = { ...buyInput(), maxDebitLamports: value('buy-max-debit') };
+    button.disabled = true;
+    field('buy-result').textContent = 'Preparing wallet approval…';
+    try {
+      const payload = await api('/api/buy-signing-review', input);
+      const latest = { ...buyInput(), maxDebitLamports: value('buy-max-debit') };
+      if (JSON.stringify(input) !== JSON.stringify(latest)) throw new Error('BUY_INPUT_CHANGED');
+      buyApproval = payload;
+      const { plan, budget, expiresAt } = payload.review.details;
+      display('buy-result', {
+        wallet: plan.owner, mint: plan.mint, destination: plan.destinationTokenAccount,
+        tradeBudgetLamports: plan.tradeBudgetLamports, quotedNetworkFeeLamports: budget.feeLamports,
+        maxTotalDebitLamports: plan.maxDebitLamports, minimumTokenAmountRaw: plan.minimumTokenAmountRaw,
+        expiresAt: new Date(expiresAt).toISOString(), digest: payload.review.digest,
+      });
+      field('buy-sign-simulate').disabled = false;
+    } catch (error) { field('buy-result').textContent = error.message; }
+    finally { button.disabled = false; }
+  });
+  field('buy-sign-simulate').addEventListener('click', async () => {
+    const payload = buyApproval;
+    clearBuyApproval();
+    if (!payload) return;
+    field('buy-result').textContent = 'Awaiting wallet signature and devnet simulation…';
+    try {
+      const signedTransactions = await sign(payload, payload.review.digest);
+      display('buy-result', await api('/api/verify', { reviewDigest: payload.review.digest, signedTransactions }));
+    } catch (error) { field('buy-result').textContent = error.message; }
   });
   field('sell-form').addEventListener('submit', event => {
     event.preventDefault();

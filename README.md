@@ -240,3 +240,11 @@ signature requirement and transaction fingerprint. Network and account rent
 costs still need separate verification before execution. Curve conditions can
 change between review and execution, including crossing the migration threshold.
 Buy signing and submission remain pending.
+
+The Buy panel can also prepare an expiring wallet approval and simulate the
+signed candidate. Set an explicit total debit cap in lamports. The server checks
+the quoted message fee and reserve before requesting a signature, then checks
+the RPC simulation's payer balances against the cap. The debit calculation
+adds the reported network fee conservatively. RPC nodes that omit the balance
+evidence cannot complete this check. This flow ends at simulation. Buy submission
+and live wallet acceptance testing are pending.

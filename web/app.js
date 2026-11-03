@@ -140,4 +140,4 @@ if (validSession) {
 }
 render();
 
-if (validSession) attachLauncherPanel({ api, connectedAddress: () => session.address });
+if (validSession) attachLauncherPanel({ api, connectedAddress: () => session.address, sign: (request, digest) => session.sign(request, digest) });

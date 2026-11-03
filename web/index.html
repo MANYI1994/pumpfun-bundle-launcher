@@ -38,6 +38,9 @@
 <label for="buy-slippage">Slippage in basis points</label><input id="buy-slippage" type="number" required min="1" max="300" value="100">
 <button id="buy-review">Get buy estimate</button>
 <button id="buy-transaction" type="button" class="secondary">Build unsigned buy review</button>
+<label for="buy-max-debit">Maximum total debit in lamports, including rent and fees</label><input id="buy-max-debit" maxlength="10" inputmode="numeric" pattern="[1-9][0-9]*">
+<button id="buy-prepare-sign" type="button" class="secondary">Prepare wallet approval</button>
+<button id="buy-sign-simulate" type="button" disabled>Sign and simulate this review</button>
 </form>
 <pre id="buy-result" aria-live="polite"></pre>
 </section>

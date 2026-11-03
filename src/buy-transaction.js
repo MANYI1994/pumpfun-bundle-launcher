@@ -23,7 +23,7 @@ function ata(owner, program, mint) {
   return pda(ASSOCIATED, [bytes(owner), bytes(program), bytes(mint)]);
 }
 
-export async function buildBuyTransaction(input, rpc = new Rpc()) {
+export async function compileBuyCandidate(input, rpc = new Rpc()) {
   const { review } = await reviewBuy(input, rpc);
   const { owner, mint, curveAddress } = review;
   const [global, feeConfig, volume, eventAuthority] = await Promise.all([
@@ -85,5 +85,10 @@ export async function buildBuyTransaction(input, rpc = new Rpc()) {
     requiredSigners: Object.keys(tx.signatures), fingerprint: transactionFingerprint(tx),
     unsignedWireBase64: getBase64EncodedWireTransaction(tx), signingAllowed: false,
   };
+  return { candidate: frozenJson(candidate), tx, context };
+}
+
+export async function buildBuyTransaction(input, rpc = new Rpc()) {
+  const { candidate } = await compileBuyCandidate(input, rpc);
   return frozenJson({ review: candidate, digest: digest(candidate) });
 }
