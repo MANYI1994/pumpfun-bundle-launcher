@@ -387,3 +387,11 @@ trade budget and minimum output. The review checks the exact message fees and
 payer balances against the configured caps and reserves. Rent and dependent
 execution still need joint simulation. These unsigned candidates have no Jito
 tip, signing flow or submission route.
+
+After compiling a launch bundle, connect each required account and use
+**Sign next bundle transaction**. The creation transaction takes two
+signatures, then each buyer signs its own transaction. The server verifies
+the signed messages in order against the active review and returns a receipt.
+Signatures must arrive before the shared review expires, which may make
+manual wallet switching impractical for a full bundle. Joint simulation and
+Jito submission remain separate work.

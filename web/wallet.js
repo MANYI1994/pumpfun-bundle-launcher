@@ -91,13 +91,15 @@ export class WalletSession {
     check(wallet && account && supported(wallet) && accountSupported(account), 'WALLET_NOT_CONNECTED');
     check(wallet.accounts?.includes(account) && account.address === data.expectedAddress, 'CONNECTED_WALLET_MISMATCH');
     check(data.chain === CHAIN && details?.cluster === 'devnet' && details.productionVerified === true
-      && details.verificationAllowed === true && ['fund', 'collect', 'buy', 'sell', 'cleanup', 'create', 'swap'].includes(details.plan?.action)
+      && details.verificationAllowed === true && ['fund', 'collect', 'buy', 'sell', 'cleanup', 'create', 'swap', 'launch-bundle'].includes(details.plan?.action)
       && details.broadcast === false, 'UNVERIFIED_WALLET_REQUEST');
     check(typeof confirmation === 'string' && /^[a-f0-9]{64}$/.test(confirmation) && confirmation === data.review.digest, 'REVIEW_NOT_APPROVED');
     check(Date.now() < details.expiresAt && details.expiresAt <= Date.now() + 60000, 'REVIEW_EXPIRED');
     check(Array.isArray(data.unsignedTransactions) && data.unsignedTransactions.length > 0
       && data.unsignedTransactions.length <= 5 && data.unsignedTransactions.length === details.transactions?.length, 'INVALID_BATCH');
-    const signerCount = details.plan.action === 'create' ? 2 : 1;
+    const bundle = details.plan.action === 'launch-bundle';
+    const signerCount = bundle ? details.transactions[0].requiredSigners?.length : details.plan.action === 'create' ? 2 : 1;
+    check(signerCount === 1 || signerCount === 2, 'INVALID_SIGNER_COUNT');
     check(signerCount === 1 || data.unsignedTransactions.length === 1, 'INVALID_BATCH');
     const signerOffsets = [];
     const requests = data.unsignedTransactions.map((wire, i) => {

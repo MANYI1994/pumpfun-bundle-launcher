@@ -23,10 +23,18 @@ export async function verifyCreationSignatures(envelope, confirmation, signedWir
   }, { blockhash: review.blockhash, lastValidBlockHeight: raw(review.lastValidBlockHeight) });
   requireSafe(equalDigest(expected.digest, confirmation) &&
     JSON.stringify(frozenJson(expected.review)) === JSON.stringify(review), 'CREATION_REVIEW_CHANGED');
-  requireSafe(Array.isArray(signedWires) && signedWires.length >= 1 && signedWires.length <= 2, 'INVALID_CREATION_SIGNED_WIRES');
+  const signedWireBase64 = await verifyAndMergeWireSignatures(
+    expected.review.unsignedWireBase64, expected.review.requiredSigners, signedWires,
+    'MINT_AND_CREATOR_SIGNATURES_REQUIRED');
+  return frozenJson({ verified: true, reviewDigest: expected.digest, fingerprint: expected.review.fingerprint,
+    mintAddress: review.mintAddress, creatorAddress: review.creatorAddress,
+    signedWireBase64, broadcast: false });
+}
 
-  const unsigned = decodeWire(expected.review.unsignedWireBase64);
-  const required = expected.review.requiredSigners;
+export async function verifyAndMergeWireSignatures(unsignedWire, required, signedWires, missingCode) {
+  requireSafe(Array.isArray(signedWires) && signedWires.length >= 1 && signedWires.length <= required.length, 'INVALID_CREATION_SIGNED_WIRES');
+
+  const unsigned = decodeWire(unsignedWire);
   const signatures = Object.fromEntries(required.map(address => [address, null]));
   for (const wire of signedWires) {
     const transaction = decodeWire(wire);
@@ -41,8 +49,6 @@ export async function verifyCreationSignatures(envelope, confirmation, signedWir
       signatures[address] = signature;
     }
   }
-  requireSafe(required.every(address => signatures[address]), 'MINT_AND_CREATOR_SIGNATURES_REQUIRED');
-  return frozenJson({ verified: true, reviewDigest: expected.digest, fingerprint: expected.review.fingerprint,
-    mintAddress: review.mintAddress, creatorAddress: review.creatorAddress,
-    signedWireBase64: getBase64EncodedWireTransaction({ ...unsigned, signatures }), broadcast: false });
+  requireSafe(required.every(address => signatures[address]), missingCode);
+  return getBase64EncodedWireTransaction({ ...unsigned, signatures });
 }

@@ -134,8 +134,24 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
       }
     } finally { creationSign.disabled = !creation; }
   });
-  field('bundle-form').addEventListener('submit', event => {
+  let bundle;
+  let bundleRevision = 0;
+  const bundleSign = field('bundle-sign');
+  function clearBundle() {
+    bundle = undefined;
+    bundleRevision++;
+    bundleSign.disabled = true;
+  }
+  field('bundle-form').addEventListener('input', clearBundle);
+  field('creation-form').addEventListener('input', clearBundle);
+  field('metadata-package').addEventListener('click', clearBundle);
+  field('bundle-form').addEventListener('submit', async event => {
     event.preventDefault();
+    clearBundle();
+    const revision = bundleRevision;
+    const compile = event.submitter?.value === 'transaction';
+    const button = field(compile ? 'bundle-transaction' : 'bundle-plan');
+    button.disabled = true;
     try {
       const slippageBps = Number(value('bundle-slippage'));
       const buyers = value('bundle-buyers').split(/\r?\n/).map(line => {
@@ -145,14 +161,65 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
         }
         return { address, spendLamports, maxDebitLamports, slippageBps };
       });
-      const compile = event.submitter?.value === 'transaction';
-      action(field(compile ? 'bundle-transaction' : 'bundle-plan'), 'bundle-result',
-        compile ? '/api/launch-bundle-transaction' : '/api/launch-bundle-plan', {
+      const result = await api(compile ? '/api/launch-bundle-transaction' : '/api/launch-bundle-plan', {
         creatorAddress: connectedAddress() || '', mintAddress: value('token-mint'),
         metadata: metadata(), metadataUri: value('token-uri'),
         creationMaxDebitLamports: value('creation-max-debit'), buyers,
       });
-    } catch (error) { field('bundle-result').textContent = error.message; }
+      if (revision !== bundleRevision) return;
+      if (compile) {
+        bundle = { ...result, index: 0, signatures: result.review.transactions.map(() => new Map()) };
+        const { transactions, ...review } = result.review;
+        display('bundle-result', { ...review, digest: result.digest,
+          transactions: transactions.map(({ unsignedWireBase64, ...step }) => step),
+          nextSigners: transactions[0].requiredSigners });
+        bundleSign.disabled = false;
+      } else display('bundle-result', result);
+    } catch (error) { if (revision === bundleRevision) field('bundle-result').textContent = error.message; }
+    finally { button.disabled = false; }
+  });
+
+  bundleSign.addEventListener('click', async () => {
+    const current = bundle;
+    if (!current) return;
+    const tx = current.review.transactions[current.index];
+    const signatures = current.signatures[current.index];
+    const owner = connectedAddress();
+    if (!tx.requiredSigners.includes(owner) || signatures.has(owner)) {
+      display('bundle-result', { transaction: current.index + 1,
+        nextSigners: tx.requiredSigners.filter(address => !signatures.has(address)) });
+      return;
+    }
+    bundleSign.disabled = true;
+    try {
+      const wire = fromBase64(tx.unsignedWireBase64);
+      const messageOffset = 1 + 64 * tx.requiredSigners.length;
+      const payload = { chain: 'solana:devnet', expectedAddress: owner,
+        unsignedTransactions: [tx.unsignedWireBase64],
+        review: { digest: current.digest, details: {
+          cluster: 'devnet', productionVerified: true, verificationAllowed: true, broadcast: false,
+          plan: { action: 'launch-bundle' }, expiresAt: current.review.expiresAt,
+          transactions: [{ messageBase64: toBase64(wire.subarray(messageOffset)), requiredSigners: tx.requiredSigners }],
+        } } };
+      const [signed] = await sign(payload, current.digest);
+      if (bundle !== current) return;
+      signatures.set(owner, signed);
+      if (signatures.size === tx.requiredSigners.length) current.index++;
+      const next = current.review.transactions[current.index];
+      if (next) {
+        display('bundle-result', { transaction: current.index + 1, action: next.action,
+          nextSigners: next.requiredSigners.filter(address => !current.signatures[current.index].has(address)),
+          expiresAt: new Date(current.review.expiresAt).toISOString() });
+      } else {
+        clearBundle();
+        const revision = bundleRevision;
+        const receipt = await api('/api/launch-bundle-verify', { confirmation: current.digest,
+          signedTransactions: current.signatures.map(group => [...group.values()]) });
+        if (revision === bundleRevision) display('bundle-result', receipt);
+      }
+    } catch (error) {
+      field('bundle-result').textContent = error.message;
+    } finally { bundleSign.disabled = !bundle; }
   });
   const buyInput = () => ({
     owner: connectedAddress() || '', mint: value('monitor-mint'),

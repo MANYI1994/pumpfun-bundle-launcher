@@ -1,3 +1,5 @@
+import { buildLaunchBundle } from './bundle-transaction.js';
+import { verifyAndMergeWireSignatures } from './create-verification.js';
 import { inspectCreatedMint } from './creation-outcome.js';
 import { reviewTokenCreation } from './create-token.js';
 import { simulateVerifiedTrade } from './buy-simulation.js';
@@ -33,6 +35,7 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
   const token = randomBytes(32).toString('hex');
   let origin, active = null, verified = null, ticket = null, operationId = null, busy = false, revision = 0;
   let pendingCreation;
+  let pendingBundle;
   const server = http.createServer(async (req, res) => {
     const respond = (status, value) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value)); };
     res.setHeader('cache-control', 'no-store');
@@ -47,7 +50,7 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
       if (req.method === 'GET' && assets.has(req.url)) {
         const asset = assets.get(req.url); res.writeHead(200, { 'content-type': asset.mime + '; charset=utf-8' }); res.end(asset.bytes); return;
       }
-      requireSafe(req.method === 'POST' && ['/api/create-review', '/api/create-simulate', '/api/review', '/api/collection-review', '/api/batch-funding-review', '/api/buy-signing-review', '/api/pumpswap-signing-review', '/api/sell-signing-review', '/api/cleanup-signing-review', '/api/verify', '/api/cancel', '/api/mode', '/api/simulate', '/api/submit', '/api/recover', '/api/operations', ...PANEL_ROUTES].includes(req.url), 'ROUTE_NOT_ALLOWED');
+      requireSafe(req.method === 'POST' && ['/api/launch-bundle-transaction', '/api/launch-bundle-verify', '/api/create-review', '/api/create-simulate', '/api/review', '/api/collection-review', '/api/batch-funding-review', '/api/buy-signing-review', '/api/pumpswap-signing-review', '/api/sell-signing-review', '/api/cleanup-signing-review', '/api/verify', '/api/cancel', '/api/mode', '/api/simulate', '/api/submit', '/api/recover', '/api/operations', ...PANEL_ROUTES].includes(req.url), 'ROUTE_NOT_ALLOWED');
       const supplied = req.headers['x-launcher-session'];
       requireSafe(req.headers.origin === origin && typeof supplied === 'string' && /^[a-f0-9]{64}$/.test(supplied)
         && timingSafeEqual(Buffer.from(token), Buffer.from(supplied)), 'SESSION_OR_ORIGIN_REJECTED');
@@ -60,7 +63,27 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
       }
       requireSafe(!busy, 'REQUEST_IN_PROGRESS'); busy = true;
       try {
-        if (req.url === '/api/create-review') {
+        if (req.url === '/api/launch-bundle-transaction') {
+          pendingBundle = undefined;
+          pendingBundle = await buildLaunchBundle(body);
+          respond(200, pendingBundle);
+        } else if (req.url === '/api/launch-bundle-verify') {
+          exactKeys(body, ['confirmation', 'signedTransactions']);
+          const bundle = pendingBundle;
+          requireSafe(bundle && body.confirmation === bundle.digest, 'BUNDLE_REVIEW_NOT_ACTIVE');
+          pendingBundle = undefined;
+          const { review } = bundle;
+          requireSafe(Date.now() < review.expiresAt, 'BUNDLE_REVIEW_EXPIRED');
+          requireSafe(Array.isArray(body.signedTransactions) &&
+            body.signedTransactions.length === review.transactions.length, 'INVALID_BUNDLE_SIGNED_TRANSACTIONS');
+          const signed = await Promise.all(review.transactions.map((tx, index) =>
+            verifyAndMergeWireSignatures(tx.unsignedWireBase64, tx.requiredSigners,
+              body.signedTransactions[index], 'BUNDLE_SIGNATURES_MISSING')));
+          const validity = await new Rpc().read('isBlockhashValid', [review.blockhash, { commitment: 'confirmed' }]);
+          requireSafe(validity?.value === true && Date.now() < review.expiresAt, 'BUNDLE_REVIEW_EXPIRED');
+          respond(200, { verified: true, digest: bundle.digest, transactionCount: signed.length,
+            fingerprints: review.transactions.map(tx => tx.fingerprint), broadcast: false });
+        } else if (req.url === '/api/create-review') {
           requireSafe(!ticket, 'EXISTING_EXECUTION_REQUIRES_RECOVERY');
           exactKeys(body, ['metadata', 'metadataUri', 'mintAddress', 'creatorAddress', 'maxDebitLamports']);
           const { maxDebitLamports, ...input } = body;
