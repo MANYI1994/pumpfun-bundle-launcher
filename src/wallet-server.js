@@ -1,3 +1,4 @@
+import { simulateLaunchBundle } from './bundle-simulation.js';
 import { buildLaunchBundle } from './bundle-transaction.js';
 import { verifyAndMergeWireSignatures } from './create-verification.js';
 import { inspectCreatedMint } from './creation-outcome.js';
@@ -36,6 +37,7 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
   let origin, active = null, verified = null, ticket = null, operationId = null, busy = false, revision = 0;
   let pendingCreation;
   let pendingBundle;
+  let verifiedBundle;
   const server = http.createServer(async (req, res) => {
     const respond = (status, value) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value)); };
     res.setHeader('cache-control', 'no-store');
@@ -50,7 +52,7 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
       if (req.method === 'GET' && assets.has(req.url)) {
         const asset = assets.get(req.url); res.writeHead(200, { 'content-type': asset.mime + '; charset=utf-8' }); res.end(asset.bytes); return;
       }
-      requireSafe(req.method === 'POST' && ['/api/launch-bundle-transaction', '/api/launch-bundle-verify', '/api/create-review', '/api/create-simulate', '/api/review', '/api/collection-review', '/api/batch-funding-review', '/api/buy-signing-review', '/api/pumpswap-signing-review', '/api/sell-signing-review', '/api/cleanup-signing-review', '/api/verify', '/api/cancel', '/api/mode', '/api/simulate', '/api/submit', '/api/recover', '/api/operations', ...PANEL_ROUTES].includes(req.url), 'ROUTE_NOT_ALLOWED');
+      requireSafe(req.method === 'POST' && ['/api/launch-bundle-transaction', '/api/launch-bundle-verify', '/api/launch-bundle-simulate', '/api/create-review', '/api/create-simulate', '/api/review', '/api/collection-review', '/api/batch-funding-review', '/api/buy-signing-review', '/api/pumpswap-signing-review', '/api/sell-signing-review', '/api/cleanup-signing-review', '/api/verify', '/api/cancel', '/api/mode', '/api/simulate', '/api/submit', '/api/recover', '/api/operations', ...PANEL_ROUTES].includes(req.url), 'ROUTE_NOT_ALLOWED');
       const supplied = req.headers['x-launcher-session'];
       requireSafe(req.headers.origin === origin && typeof supplied === 'string' && /^[a-f0-9]{64}$/.test(supplied)
         && timingSafeEqual(Buffer.from(token), Buffer.from(supplied)), 'SESSION_OR_ORIGIN_REJECTED');
@@ -65,6 +67,7 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
       try {
         if (req.url === '/api/launch-bundle-transaction') {
           pendingBundle = undefined;
+          verifiedBundle = undefined;
           pendingBundle = await buildLaunchBundle(body);
           respond(200, pendingBundle);
         } else if (req.url === '/api/launch-bundle-verify') {
@@ -81,8 +84,20 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
               body.signedTransactions[index], 'BUNDLE_SIGNATURES_MISSING')));
           const validity = await new Rpc().read('isBlockhashValid', [review.blockhash, { commitment: 'confirmed' }]);
           requireSafe(validity?.value === true && Date.now() < review.expiresAt, 'BUNDLE_REVIEW_EXPIRED');
+          const verifiedSnapshot = { bundle, signed };
+          verifiedBundle = verifiedSnapshot;
+          setTimeout(() => {
+            if (verifiedBundle === verifiedSnapshot) verifiedBundle = undefined;
+          }, Math.max(0, review.expiresAt - Date.now())).unref();
           respond(200, { verified: true, digest: bundle.digest, transactionCount: signed.length,
             fingerprints: review.transactions.map(tx => tx.fingerprint), broadcast: false });
+        } else if (req.url === '/api/launch-bundle-simulate') {
+          exactKeys(body, ['confirmation']);
+          requireSafe(verifiedBundle && body.confirmation === verifiedBundle.bundle.digest,
+            'BUNDLE_SIGNATURES_NOT_VERIFIED');
+          const { bundle, signed } = verifiedBundle;
+          if (Date.now() >= bundle.review.expiresAt) verifiedBundle = undefined;
+          respond(200, await simulateLaunchBundle(bundle, signed));
         } else if (req.url === '/api/create-review') {
           requireSafe(!ticket, 'EXISTING_EXECUTION_REQUIRES_RECOVERY');
           exactKeys(body, ['metadata', 'metadataUri', 'mintAddress', 'creatorAddress', 'maxDebitLamports']);

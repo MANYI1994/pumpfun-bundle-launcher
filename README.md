@@ -402,3 +402,15 @@ message fixes the spend and output floor. The dashboard shows the remaining
 signers and time and disables the signing button for other accounts. A
 blockhash can expire before the local window, so final verification still
 checks it on devnet. Compile a new review if the window expires.
+
+**Simulate verified bundle on local node** sends the signed, ordered wire
+transactions to a compatible Jito-Solana simulation RPC on
+`127.0.0.1:8899`. The RPC must report the devnet genesis and support
+`simulateBundle` with payer balance, fee and token balance evidence. Use a
+trusted local node because it receives signed transactions. The launcher
+checks each debit cap, reserve and buyer token credit against the review.
+A missing node or missing evidence stops the rehearsal. The public devnet
+RPC remains the ordinary transaction transport. Block Engine submission
+remains pending.
+
+[Jito-Solana simulation request and result types](https://github.com/jito-foundation/jito-solana/blob/master/rpc-client-api/src/bundles.rs)

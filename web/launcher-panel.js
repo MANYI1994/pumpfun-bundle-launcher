@@ -137,9 +137,13 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
   });
   let bundle;
   let bundleRevision = 0;
+  let bundleReceipt;
+  const bundleSimulate = field('bundle-simulate');
   const bundleSign = field('bundle-sign');
   function clearBundle() {
     bundle = undefined;
+    bundleReceipt = undefined;
+    bundleSimulate.disabled = true;
     bundleRevision++;
     bundleSign.disabled = true;
   }
@@ -217,14 +221,35 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
         const revision = bundleRevision;
         const receipt = await api('/api/launch-bundle-verify', { confirmation: current.digest,
           signedTransactions: current.signatures.map(group => [...group.values()]) });
-        if (revision === bundleRevision) display('bundle-result', receipt);
+        if (revision === bundleRevision) {
+          bundleReceipt = { digest: receipt.digest, expiresAt: current.review.expiresAt };
+          display('bundle-result', receipt);
+          renderSigningStatus();
+        }
       }
     } catch (error) {
       field('bundle-result').textContent = error.message;
     } finally { current.signing = false; renderSigningStatus(); }
   });
+  bundleSimulate.addEventListener('click', async () => {
+    const receipt = bundleReceipt;
+    if (!receipt || receipt.busy || Date.now() >= receipt.expiresAt) return;
+    receipt.busy = true;
+    renderSigningStatus();
+    try {
+      const result = await api('/api/launch-bundle-simulate', { confirmation: receipt.digest });
+      if (bundleReceipt === receipt) display('bundle-result', result);
+    } catch (error) {
+      if (bundleReceipt === receipt) field('bundle-result').textContent = error.message;
+    } finally {
+      receipt.busy = false;
+      renderSigningStatus();
+    }
+  });
+
   function renderSigningStatus() {
     const now = Date.now();
+    bundleSimulate.disabled = !bundleReceipt || bundleReceipt.busy || now >= bundleReceipt.expiresAt;
     const connected = connectedAddress();
     const render = (button, statusId, current, expiresAt, required, signed) => {
       if (!current) {
