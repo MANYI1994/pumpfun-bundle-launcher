@@ -3,7 +3,7 @@ const nativeFetch = globalThis.fetch.bind(globalThis);
 
 export const DEVNET_GENESIS = 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG';
 const ALLOWED_RPC = 'api.devnet.solana.com';
-const READ_METHODS = new Set(['getGenesisHash', 'getBalance', 'getAccountInfo', 'getSignatureStatuses', 'getLatestBlockhash', 'getFeeForMessage']);
+const READ_METHODS = new Set(['getGenesisHash', 'getBalance', 'getAccountInfo', 'getSignatureStatuses', 'getLatestBlockhash', 'getFeeForMessage', 'getBlockHeight', 'isBlockhashValid', 'simulateTransaction']);
 const issuedContexts = new WeakMap();
 export function assertDevnetContext(context) {
   const issued = issuedContexts.get(context);
@@ -25,6 +25,9 @@ function validateParams(method, params) {
   if (method === 'getBalance') { requireSafe(params.length === 1, 'INVALID_RPC_PARAMETERS'); validAddress(params[0]); }
   if (method === 'getLatestBlockhash') requireSafe(params.length === 1 && canonical(params[0]) === canonical({ commitment: 'confirmed' }), 'INVALID_RPC_PARAMETERS');
   if (method === 'getFeeForMessage') requireSafe(params.length === 2 && typeof params[0] === 'string' && params[0].length <= 1644 && Buffer.from(params[0], 'base64').toString('base64') === params[0] && canonical(params[1]) === canonical({ commitment: 'confirmed' }), 'INVALID_RPC_PARAMETERS');
+  if (method === 'getBlockHeight') requireSafe(params.length === 1 && ['confirmed', 'finalized'].some(commitment => canonical(params[0]) === canonical({ commitment })), 'INVALID_RPC_PARAMETERS');
+  if (method === 'isBlockhashValid') { requireSafe(params.length === 2 && canonical(params[1]) === canonical({ commitment: 'confirmed' }), 'INVALID_RPC_PARAMETERS'); validAddress(params[0]); }
+  if (method === 'simulateTransaction') requireSafe(params.length === 2 && typeof params[0] === 'string' && params[0].length <= 1644 && Buffer.from(params[0], 'base64').length <= 1232 && Buffer.from(params[0], 'base64').toString('base64') === params[0] && canonical(params[1]) === canonical({ encoding: 'base64', commitment: 'confirmed', sigVerify: true, replaceRecentBlockhash: false }), 'INVALID_RPC_PARAMETERS');
   if (method === 'getAccountInfo') {
     requireSafe(params.length === 2 && canonical(params[1]) === canonical({ encoding: 'base64', commitment: 'confirmed' }), 'INVALID_RPC_PARAMETERS'); validAddress(params[0]);
   }

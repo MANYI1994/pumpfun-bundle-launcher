@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Launcher · Wallet signing test</title><link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script></head>
 <body><main>
 <p class="badge">DEVNET · SIGNATURE TEST</p><h1>Connect, review, sign.</h1>
-<p>Verify your wallet can sign the exact transfer you approve. Nothing is sent to the blockchain.</p>
+<p id="intro">Verify your wallet can sign the exact transfer you approve. Nothing is sent to the blockchain in signing-only mode.</p>
 <section><h2>1. Connect your wallet</h2><p>Use a disposable devnet account with test SOL. Your wallet keeps your private keys.</p>
 <label for="wallets">Available wallets</label><select id="wallets"><option value="">Looking for compatible wallets…</option></select>
 <div class="actions"><button id="connect" disabled>Connect wallet</button><button id="disconnect" class="secondary" disabled>Disconnect</button></div>
@@ -14,6 +14,14 @@
 <section id="review-section" hidden><h2>3. Review and sign</h2><p>Check the recipient, amount, network fee and remaining balance. The wallet popup must show the same transfer.</p>
 <dl id="summary"></dl><p id="expiry"></p><label class="consent"><input type="checkbox" id="approve"> I approve this exact devnet transfer for signature verification.</label>
 <button id="sign" disabled>Sign in wallet</button></section>
+<section id="execution-section" hidden><h2>4. Simulate and submit on devnet</h2>
+<p>Submission is a separate approval after signing. If the outcome is uncertain, check the original operation below instead of creating another transfer.</p>
+<pre id="execution-summary"></pre><button id="simulate" disabled>Simulate signed transfer</button>
+<label class="consent"><input type="checkbox" id="approve-send"> Send this exact transfer on Solana devnet.</label>
+<button id="submit" disabled>Submit approved devnet transfer</button></section>
+<section id="recovery-section" hidden><h2>Recover an operation</h2><p>Recovery checks the original signature and never resends. It can cancel a prepared operation that has not reached submission.</p>
+<button id="refresh-operations" class="secondary">Load saved operations</button><label for="operations">Operation</label><select id="operations"><option value="">Load operations first</option></select>
+<button id="recover" class="secondary" disabled>Check original operation</button></section>
 <p id="status" role="status" aria-live="polite">Open the complete session URL printed by the local server.</p>
-<p class="footnote">Desktop wallet extensions only in this step. Mobile deep links, trading and transaction submission are not enabled.</p>
+<p id="footnote" class="footnote">Desktop wallet extensions only in this step. Mobile deep links, trading and transaction submission are not enabled.</p>
 </main></body></html>

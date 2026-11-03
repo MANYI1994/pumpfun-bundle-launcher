@@ -2,7 +2,7 @@ import {
   AccountRole, createTransactionMessage, setTransactionMessageFeePayer,
   setTransactionMessageLifetimeUsingBlockhash, appendTransactionMessageInstructions,
   compileTransaction, assertIsFullySignedTransaction,
-  getBase64EncodedWireTransaction, getTransactionDecoder, getAddressEncoder, getProgramDerivedAddress,
+  getBase64EncodedWireTransaction, getTransactionDecoder, getSignatureFromTransaction, getAddressEncoder, getProgramDerivedAddress,
 } from '@solana/kit';
 import { raw, requireSafe, validAddress, digest, frozenJson, equalDigest } from './security.js';
 import { validateEnvelope, LIMITS, enforceFundingBudget, enforceCollectionBudgets } from './plans.js';
@@ -102,6 +102,8 @@ export function transactionFingerprint(transaction) { return digest({ message: B
 // Only reviews issued by this module can be signed. Serialized hashes alone are
 // not capabilities: raw caller-supplied transaction objects are never accepted.
 const pendingReviews = new WeakMap();
+const verifiedExecutions = new WeakMap();
+const executionPermits = new WeakMap();
 function issueReview(envelope, transactions, lifetime, context = null, budget = null) {
   const plan = validateEnvelope(envelope, envelope.digest);
   const details = {
@@ -168,11 +170,15 @@ export async function verifyReviewedBatch(review, confirmation, signedTransactio
     }
     assertIsFullySignedTransaction(tx);
     bounded(tx);
-    output.push({ wireBase64: getBase64EncodedWireTransaction(tx), fingerprint: transactionFingerprint(tx) });
+    output.push({ wireBase64: getBase64EncodedWireTransaction(tx), fingerprint: transactionFingerprint(tx), signature: getSignatureFromTransaction(tx) });
   }
   if (context) assertDevnetContext(context);
   requireSafe(Date.now() < review.details.expiresAt, 'REVIEW_EXPIRED');
-  return frozenJson({ transactions: output, productionVerified: Boolean(context), broadcast: false });
+  const execution = frozenJson({ version: 1, cluster: 'devnet', planDigest: review.details.planDigest,
+    expiresAt: review.details.expiresAt, lastValidBlockHeight: review.details.lastValidBlockHeight, transactions: output });
+  const result = frozenJson({ transactions: output, productionVerified: Boolean(context), broadcast: false, executionDigest: digest(execution) });
+  verifiedExecutions.set(result, { context, execution, plan: review.details.plan, budget: review.details.budget });
+  return result;
 }
 
 // Export only server-issued production reviews, never arbitrary caller messages.
@@ -200,4 +206,29 @@ export async function verifySignedWireBatch(review, confirmation, wires) {
     return tx;
   });
   return verifyReviewedBatch(review, confirmation, transactions);
+}
+
+// One-use handoff from verification to the isolated native-transfer executor.
+export function claimVerifiedExecution(batch, confirmation) {
+  const record = verifiedExecutions.get(batch);
+  requireSafe(record && batch.productionVerified && equalDigest(confirmation, batch.executionDigest), 'EXECUTION_NOT_VERIFIED_OR_APPROVED');
+  assertDevnetContext(record.context);
+  requireSafe(record.plan.action === 'fund' && record.execution.transactions.length === 1, 'EXECUTION_ROUTE_NOT_ENABLED');
+  verifiedExecutions.delete(batch);
+  const permit = Object.freeze({ executionDigest: batch.executionDigest });
+  executionPermits.set(permit, { ...record, used: false });
+  return permit;
+}
+export function inspectExecutionPermit(permit) {
+  const record = executionPermits.get(permit);
+  requireSafe(record && !record.used, 'EXECUTION_PERMIT_INVALID_OR_CONSUMED');
+  assertDevnetContext(record.context);
+  requireSafe(Date.now() < record.execution.expiresAt, 'EXECUTION_APPROVAL_EXPIRED');
+  return frozenJson({ executionDigest: permit.executionDigest, ...record.execution,
+    plan: record.plan, budget: record.budget, blockhash: record.context.blockhash });
+}
+export function consumeExecutionPermit(permit) {
+  const descriptor = inspectExecutionPermit(permit);
+  executionPermits.get(permit).used = true;
+  return descriptor;
 }

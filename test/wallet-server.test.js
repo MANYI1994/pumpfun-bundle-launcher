@@ -19,6 +19,8 @@ test('wallet server serves only local assets and protects all API calls with ori
   assert.deepEqual(await (await post({}, headers)).json(), { cancelled: true });
   const invalid = await fetch(server.origin + '/api/review', { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify({ privateKey: 'do-not-forward' }) });
   assert.deepEqual(await invalid.json(), { error: 'INVALID_FIELDS' });
+  const disabled = await fetch(server.origin + '/api/simulate', { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify({ executionDigest: '0'.repeat(64) }) });
+  assert.deepEqual(await disabled.json(), { error: 'EXECUTION_MODE_DISABLED' });
   const verify = await fetch(server.origin + '/api/verify', { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify({ reviewDigest: '0'.repeat(64), signedTransactions: [] }) });
   assert.deepEqual(await verify.json(), { error: 'REVIEW_NOT_ACTIVE' });
   assert.equal(verify.headers.get('access-control-allow-origin'), null);

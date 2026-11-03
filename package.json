@@ -12,7 +12,8 @@
     "test": "node --test",
     "check": "node scripts/check-security.js",
     "audit:dependencies": "npm audit --omit=dev --audit-level=moderate",
-    "wallet:connect": "node src/wallet-server.js"
+    "wallet:connect": "node src/wallet-server.js",
+    "wallet:execute": "node src/wallet-server.js --execution-state"
   },
   "dependencies": {
     "@solana/kit": "8.6.0"

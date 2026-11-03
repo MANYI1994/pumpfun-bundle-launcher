@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fundingPlan } from './plans.js';
+import { ExecutionJournal } from './journal.js';
+import { NativeTransferExecutor } from './executor.js';
 import { Rpc } from './network.js';
 import { prepareFundingReview, externalSigningPayload, verifySignedWireBatch } from './transactions.js';
 import { exactKeys, requireSafe, shortError } from './security.js';
@@ -19,11 +21,13 @@ async function jsonBody(req) {
   catch { requireSafe(false, 'INVALID_JSON'); }
 }
 // Starts only when explicitly invoked. Bind address and API routes are fixed.
-export async function startWalletServer({ port = 8787 } = {}) {
+export async function startWalletServer({ port = 8787, journalRoot } = {}) {
   requireSafe(Number.isSafeInteger(port) && port >= 0 && port <= 65535, 'INVALID_PORT');
   const assets = new Map(Object.entries(ASSETS).map(([url, [name, mime]]) => [url, { mime, bytes: readFileSync(new URL('../web/' + name, import.meta.url)) }]));
+  const journal = journalRoot === undefined ? null : new ExecutionJournal(journalRoot);
+  const executor = journal ? new NativeTransferExecutor(journal) : null;
   const token = randomBytes(32).toString('hex');
-  let origin, active = null, busy = false, revision = 0;
+  let origin, active = null, verified = null, ticket = null, operationId = null, busy = false, revision = 0;
   const server = http.createServer(async (req, res) => {
     const respond = (status, value) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value)); };
     res.setHeader('cache-control', 'no-store');
@@ -38,18 +42,22 @@ export async function startWalletServer({ port = 8787 } = {}) {
       if (req.method === 'GET' && assets.has(req.url)) {
         const asset = assets.get(req.url); res.writeHead(200, { 'content-type': asset.mime + '; charset=utf-8' }); res.end(asset.bytes); return;
       }
-      requireSafe(req.method === 'POST' && ['/api/review', '/api/verify', '/api/cancel'].includes(req.url), 'ROUTE_NOT_ALLOWED');
+      requireSafe(req.method === 'POST' && ['/api/review', '/api/verify', '/api/cancel', '/api/mode', '/api/simulate', '/api/submit', '/api/recover', '/api/operations'].includes(req.url), 'ROUTE_NOT_ALLOWED');
       const supplied = req.headers['x-launcher-session'];
       requireSafe(req.headers.origin === origin && typeof supplied === 'string' && /^[a-f0-9]{64}$/.test(supplied)
         && timingSafeEqual(Buffer.from(token), Buffer.from(supplied)), 'SESSION_OR_ORIGIN_REJECTED');
       const body = await jsonBody(req);
+      if (req.url === '/api/mode') { exactKeys(body, []); respond(200, { executionEnabled: Boolean(executor), cluster: 'devnet' }); return; }
       if (req.url === '/api/cancel') {
-        exactKeys(body, []); revision++; active = null; respond(200, { cancelled: true }); return;
+        exactKeys(body, []); revision++; active = null; verified = null; ticket = null;
+        if (operationId && executor) { try { await executor.recover(operationId); } catch { /* Durable record remains available for recovery. */ } }
+        respond(200, { cancelled: true }); return;
       }
       requireSafe(!busy, 'REQUEST_IN_PROGRESS'); busy = true;
       try {
         if (req.url === '/api/review') {
-          active = null; const current = ++revision;
+          requireSafe(!ticket, 'EXISTING_EXECUTION_REQUIRES_RECOVERY');
+          active = null; verified = null; const current = ++revision;
           exactKeys(body, ['payerAddress', 'destinationAddress', 'lamports']);
           const envelope = fundingPlan({ payerAddress: body.payerAddress, wallets: [{ id: 'wallet-test', address: body.destinationAddress, lamports: body.lamports }] });
           const context = await new Rpc().getBlockhashContext();
@@ -57,13 +65,39 @@ export async function startWalletServer({ port = 8787 } = {}) {
           const payload = externalSigningPayload(review, review.digest, body.payerAddress);
           requireSafe(current === revision, 'REVIEW_CANCELLED');
           active = review; respond(200, payload);
-        } else {
+        } else if (req.url === '/api/verify') {
           exactKeys(body, ['reviewDigest', 'signedTransactions']);
           const review = active; active = null; // One attempt, including failed decoding/validation.
           requireSafe(review && review.digest === body.reviewDigest, 'REVIEW_NOT_ACTIVE');
+          const current = revision;
           const result = await verifySignedWireBatch(review, body.reviewDigest, body.signedTransactions);
+          requireSafe(current === revision, 'REVIEW_CANCELLED');
+          verified = executor ? result : null; operationId = review.details.plan.id;
           respond(200, { verified: true, productionVerified: result.productionVerified,
+            executionEnabled: Boolean(executor), executionDigest: result.executionDigest, operationId,
             fingerprints: result.transactions.map(tx => tx.fingerprint), broadcast: false });
+        } else {
+          requireSafe(executor, 'EXECUTION_MODE_DISABLED');
+          if (req.url === '/api/operations') {
+            exactKeys(body, []); respond(200, { operations: journal.list() });
+          } else if (req.url === '/api/recover') {
+            exactKeys(body, ['operationId']);
+            const result = await executor.recover(body.operationId);
+            if (result.state === 'abandoned-before-submission' && ticket?.id === body.operationId) ticket = null;
+            respond(200, result);
+          } else if (req.url === '/api/simulate') {
+            exactKeys(body, ['executionDigest']);
+            requireSafe(verified, 'NO_VERIFIED_EXECUTION');
+            const batch = verified; verified = null; const current = revision;
+            ticket = await executor.prepare(batch, body.executionDigest);
+            if (current !== revision) { ticket = null; await executor.recover(operationId); requireSafe(false, 'EXECUTION_CANCELLED'); }
+            respond(200, ticket);
+          } else {
+            exactKeys(body, ['executionDigest']);
+            requireSafe(ticket, 'NO_EXECUTION_TICKET');
+            const approved = ticket; ticket = null;
+            respond(200, await executor.submit(approved, body.executionDigest));
+          }
         }
       } finally { busy = false; }
     } catch (error) { respond(400, { error: shortError(error) }); }
@@ -77,11 +111,13 @@ export async function startWalletServer({ port = 8787 } = {}) {
   } });
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  requireSafe(process.argv.length === 2, 'INVALID_ARGUMENTS');
-  startWalletServer().then(instance => {
+  const args = process.argv.slice(2);
+  requireSafe(args.length === 0 || (args.length === 2 && args[0] === '--execution-state'), 'INVALID_ARGUMENTS');
+  const journalRoot = args[1];
+  startWalletServer({ journalRoot }).then(instance => {
     console.log('Open this session URL in a desktop browser with a Wallet Standard extension:');
     console.log(instance.url);
-    console.log('Devnet signature verification only. Nothing is broadcast. Keep the session URL private.');
+    console.log(journalRoot ? 'Devnet funding execution mode: explicit simulation and submission approval required. Keep the session URL private.' : 'Devnet signature verification only. Nothing is broadcast. Keep the session URL private.');
     for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { instance.close().catch(() => {}); });
   }).catch(error => { console.error(shortError(error)); process.exitCode = 1; });
 }

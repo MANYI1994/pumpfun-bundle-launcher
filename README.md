@@ -2,7 +2,7 @@
 
 **This branch is a restricted development preview, not a usable live token launcher.** The original startup dependency steals configuration files. Its execution layer has been removed. Do not run historical versions of the original launcher or import valuable wallets into this preview.
 
-This replacement currently supports encrypted operational-wallet creation/listing, strict funding/sell plan review, offline transaction construction, a local external-wallet signing screen, exact-byte signature verification, and read-only devnet status reconciliation. **Token creation, buying, network submission, Jito bundles, PumpSwap/Raydium execution and Flash are unavailable.** No environment variable enables them. The bonding-curve builder is an offline candidate, not a certified adapter to the currently deployed program.
+This replacement currently supports encrypted operational-wallet creation/listing, strict funding/sell plan review, offline transaction construction, a local external-wallet signing screen, exact-byte signature verification, and read-only devnet status reconciliation. **Token creation, buying, Jito bundles, PumpSwap/Raydium execution and Flash are unavailable.** Default signing mode never submits. Step 2 adds an explicitly selected, devnet-only native funding executor; it has not undergone live acceptance testing. No environment variable enables them. The bonding-curve builder is an offline candidate, not a certified adapter to the currently deployed program.
 
 ## Requirements and installation
 
@@ -66,7 +66,7 @@ Before issuing a production funding review, the client fetches the fee for the e
 
 Vault paths must have trusted, non-writable ancestors owned by the current user or root. Root-owned sticky ancestors such as `/tmp` are allowed, but vault roots remain owner-only. These checks are repeated during operations. The vault remains a local creation/authentication utility, not a hardware-isolated signer: malicious code in that utility could still observe passwords/seeds while they are being handled. Do not fund preview wallets. A local Wallet Standard extension signing screen is available for a single devnet funding transaction. Hardware and mobile integrations have not been tested.
 
-Curve reviews remain unsigned and cannot be accepted by the external-verification path because their quotes/state are unverified. Already-produced signatures are not revoked by a review timeout. Broadcasting remains unimplemented.
+Curve reviews remain unsigned and cannot be accepted by the external-verification path because their quotes/state are unverified. Already-produced signatures are not revoked by a review timeout. Generic RPC broadcasting remains refused. The separate step-2 executor supports explicitly approved native devnet funding only.
 
 ## What remains before any live use
 
@@ -74,7 +74,7 @@ Curve reviews remain unsigned and cannot be accepted by the external-verificatio
 - Complete real-extension acceptance testing, hardware/mobile signing support and a separate limited operational signer boundary for the remaining lifecycle operations.
 - Add fresh on-chain balances/quotes, simulation, final decoded transaction review and exact-byte approval through the complete signing-to-submission flow.
 - Test transaction/bundle size, fees, compute limits, blockhash expiry, all required signatures, failed/partial/unknown settlement and restart recovery with disposable keys on a supported test environment.
-- Only then add a separately reviewed submission implementation. Do not replace the current `Rpc.send()` refusal with raw `fetch` or copy the old execution files back.
+- Complete acceptance testing of the new restricted native-transfer executor before expanding submission to protocol transactions. Do not bypass `Rpc.send()` or copy the old execution files back.
 
 See [SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md) for the final review scope and remaining blockers. This preview fixes/removes unsafe code paths; it is not functional parity with the old launcher and is not certified risk-free.
 
@@ -152,3 +152,47 @@ checks. Do not bind it publicly or weaken these checks to expose it.
 Automated tests simulate the Wallet Standard provider and RPC, using disposable
 signatures. They do not establish compatibility with an installed Phantom extension
 or constitute a live devnet transaction test.
+
+
+## Step 2: modular simulation, submission and recovery
+
+The new executor is available as an **explicit devnet funding mode**. The normal
+`npm run wallet:connect` screen still verifies signatures without submitting.
+No transaction was sent during development of this step; interactive and live
+acceptance testing are deferred.
+
+When ready for that later test, use Linux and an absolute private state directory
+outside the repository (not your vault directory):
+
+```sh
+npm run wallet:execute -- /absolute/private/path/launcher-execution-state
+```
+
+The local screen adds **Simulate signed transfer**, a separate devnet-send approval,
+and saved-operation recovery controls. Simulation verifies the signed message on
+RPC with signature checking and without replacing its blockhash. Submission repeats
+preflight, rejects changed fees, and checks the balance/reserve before sending the
+same signed bytes. Both simulation and submission use the fixed public devnet RPC.
+A signed transaction is disclosed to that RPC during simulation; this assumes a
+trusted RPC provider and wallet extension. The application makes no send request
+before the separate submission approval.
+
+The journal fsyncs an immutable intent and an exclusive submission decision before
+the send request. It stores public identifiers, fingerprints and outcomes, not keys
+or signed wire. A timeout or mismatched acknowledgement becomes an uncertain outcome,
+never a new transfer or automatic retry. Restart with the **same state directory**,
+load saved operations, and check the original signature. Prepared operations that
+never reached submission are abandoned through an exclusive decision record.
+
+Only finalized status is recorded as success/failure. Unknown or expired-but-missing
+signatures keep that payer reserved; absence on a single RPC is not treated as proof
+of non-execution. Manual reconciliation is required to resolve those cases; there is
+no force-unlock or journal-reset command. Keep this directory and its backups intact.
+The journal is append-only and fails closed at its 10,000-file limit or on malformed
+state. Deleting state, using another directory, or manually creating a new plan can
+bypass application-level duplicate detection and is not recovery.
+
+See [EXECUTION_ARCHITECTURE.md](docs/EXECUTION_ARCHITECTURE.md) for module boundaries,
+API flow, failure states and scope. This executor supports one signed native funding
+transaction. Collection, token creation, buys, sells, PumpSwap, bundles and mainnet
+must receive their own adapters and reviews before they can use execution.

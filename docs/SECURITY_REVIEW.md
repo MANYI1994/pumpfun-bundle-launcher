@@ -170,3 +170,30 @@ Interface references inspected:
 - https://docs.phantom.com/developer-powertools/wallet-standard
 - https://github.com/wallet-standard/wallet-standard/blob/master/packages/core/app/src/wallets.ts
 - https://github.com/anza-xyz/wallet-standard/blob/master/packages/core/features/src/signTransaction.ts
+
+## Step 2 — isolated native devnet executor
+
+Implemented separate execution transport, journal, shared private-directory primitive
+and orchestration modules; see EXECUTION_ARCHITECTURE.md. The verified-signature output
+now issues a private, single-use capability for a single native funding transaction.
+Caller clones and public JSON cannot create it. Fresh preflight checks current
+blockhash/height, exact reviewed fee, payer budget/reserve and unchanged signed-wire
+simulation before the fsynced attempt and one allowed send. Simulation proofs bind
+the original permit and expire; provider errors become uncertain outcomes.
+
+The default wallet screen remains signing-only. Explicit journal-backed execution
+mode adds simulation, separate send approval and original-signature recovery APIs/UI.
+It is fixed to devnet, accepts no arbitrary route or key, never changes signed bytes,
+and never automatically resubmits. Journal intents/attempts/outcomes and monotonic
+payer leases survive restarts without storing reusable signed transactions. Prepared
+recovery competes atomically with sending; potentially sent operations retain their
+payer reservation until a finalized result. Missing expired history remains unknown.
+
+Automated cases cover durable-before-send ordering, restart recovery, failed RPC and
+preflight, absent history, payer reservation, finalized failure, forged capabilities,
+proof/ticket replay, pre-send cancellation versus a live controller, simulated storage
+failure, and the authenticated HTTP flow. All RPC activity in these tests is mocked.
+No live funds, real transaction submission or interactive wallet testing was performed.
+This is a development implementation awaiting acceptance testing, not an assurance
+of safe mainnet use. Token creation/buy/sell/PumpSwap, WSOL/rent, multiple independent
+execution transactions and Jito remain separate release blockers.
