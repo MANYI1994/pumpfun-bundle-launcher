@@ -344,3 +344,13 @@ Check the operation after finalization to inspect the mint and curve, including
 supply, decimals, creator match, mint authority and freeze authority. These
 fields describe the finalized accounts and do not assert authority revocation.
 Metadata hosting and live devnet acceptance remain outstanding.
+
+Use **Prepare IPFS files** to package a local PNG, JPEG or WebP image up to
+256 KiB. The dashboard computes content IDs locally, fills the image and
+metadata URLs, and offers separate CAR downloads. Upload or import both
+CAR files with a host that preserves the raw block CIDs, then check that
+both URLs resolve before approving creation. The package uses the ipfs.io
+HTTPS gateway for display URLs. Publication and pinning are performed by
+your chosen host.
+
+[CARv1 format](https://ipld.io/specs/transport/car/carv1/)

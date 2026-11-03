@@ -1,3 +1,4 @@
+import { downloadCar, packageMetadata } from './metadata-package.js';
 import { fromBase64, toBase64 } from './wallet.js';
 
 export function attachLauncherPanel({ api, connectedAddress, sign, showExecution }) {
@@ -22,6 +23,46 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
   field('metadata-build').addEventListener('click', event => {
     action(event.currentTarget, 'creation-result', '/api/metadata', metadata());
   });
+  let publication;
+  let publicationRevision = 0;
+  const publicationStatus = message => { field('metadata-package-status').textContent = message; };
+  function clearPublication() {
+    publicationRevision++;
+    publication = undefined;
+    field('download-image-car').disabled = true;
+    field('download-metadata-car').disabled = true;
+  }
+  for (const id of ['token-name', 'token-symbol', 'token-description', 'token-image', 'token-uri', 'metadata-image-file']) {
+    field(id).addEventListener('input', clearPublication);
+  }
+  field('metadata-package').addEventListener('click', async event => {
+    clearPublication();
+    clearCreation();
+    const revision = publicationRevision;
+    const button = event.currentTarget;
+    button.disabled = true;
+    publicationStatus('Preparing content-addressed files…');
+    try {
+      const result = await packageMetadata(field('metadata-image-file').files[0], metadata(),
+        input => api('/api/metadata', input));
+      if (revision !== publicationRevision) return;
+      publication = result;
+      field('token-image').value = result.imageBlock.url;
+      field('token-uri').value = result.metadataBlock.url;
+      field('download-image-car').disabled = false;
+      field('download-metadata-car').disabled = false;
+      publicationStatus('Download and upload both CAR files. The creation form now contains their IPFS URLs.');
+    } catch (error) {
+      if (revision === publicationRevision) publicationStatus(error.message);
+    } finally { button.disabled = false; }
+  });
+  field('download-image-car').addEventListener('click', () => {
+    if (publication) downloadCar(publication.imageBlock, 'token-image.car');
+  });
+  field('download-metadata-car').addEventListener('click', () => {
+    if (publication) downloadCar(publication.metadataBlock, 'token-metadata.car');
+  });
+
   let creation;
   let creationRevision = 0;
   const creationSign = field('creation-sign');

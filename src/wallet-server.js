@@ -14,7 +14,7 @@ import { Rpc, assertDevnetContext } from './network.js';
 import { prepareCreationExecution, prepareBuySigningReview, prepareSellSigningReview, prepareCleanupSigningReview, prepareFundingReview, prepareCollectionReview, externalSigningPayload, verifySignedWireBatch } from './transactions.js';
 import { exactKeys, raw, requireSafe, shortError } from './security.js';
 
-const ASSETS = Object.freeze({ '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/wallet.js': ['wallet.js', 'text/javascript'], '/launcher-panel.js': ['launcher-panel.js', 'text/javascript'], '/watchlist.js': ['watchlist.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] });
+const ASSETS = Object.freeze({ '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/wallet.js': ['wallet.js', 'text/javascript'], '/launcher-panel.js': ['launcher-panel.js', 'text/javascript'], '/watchlist.js': ['watchlist.js', 'text/javascript'], '/metadata-package.js': ['metadata-package.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] });
 async function jsonBody(req) {
   requireSafe(req.headers['content-type'] === 'application/json', 'JSON_REQUIRED');
   const chunks = []; let size = 0;
