@@ -64,9 +64,9 @@
 <button id="sign" disabled>Sign in wallet</button></section>
 <section id="execution-section" hidden><h2>4. Simulate and submit on devnet</h2>
 <p>Submission is a separate approval after signing. If the outcome is uncertain, check the original operation below instead of creating another transfer.</p>
-<pre id="execution-summary"></pre><button id="simulate" disabled>Simulate signed transfer</button>
-<label class="consent"><input type="checkbox" id="approve-send"> Send this exact transfer on Solana devnet.</label>
-<button id="submit" disabled>Submit approved devnet transfer</button></section>
+<pre id="execution-summary"></pre><button id="simulate" disabled>Simulate signed transaction</button>
+<label class="consent"><input type="checkbox" id="approve-send"> Submit this exact signed transaction on Solana devnet.</label>
+<button id="submit" disabled>Submit approved devnet transaction</button></section>
 <section id="recovery-section" hidden><h2>Recover an operation</h2><p>Recovery checks the original signature and never resends. It can cancel a prepared operation that has not reached submission.</p>
 <button id="refresh-operations" class="secondary">Load saved operations</button><label for="operations">Operation</label><select id="operations"><option value="">Load operations first</option></select>
 <button id="recover" class="secondary" disabled>Check original operation</button></section>

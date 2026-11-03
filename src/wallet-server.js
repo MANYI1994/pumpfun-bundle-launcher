@@ -88,7 +88,10 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
           if (review.details.plan.action === 'buy') {
             const simulation = await simulateVerifiedBuy(review, result);
             requireSafe(current === revision, 'REVIEW_CANCELLED');
-            respond(200, simulation);
+            verified = executor ? result : null;
+            operationId = review.details.plan.id;
+            respond(200, { ...simulation, executionEnabled: Boolean(executor),
+              executionDigest: result.executionDigest, operationId });
             return;
           }
           verified = executor ? result : null; operationId = review.details.plan.id;

@@ -1,4 +1,4 @@
-export function attachLauncherPanel({ api, connectedAddress, sign }) {
+export function attachLauncherPanel({ api, connectedAddress, sign, showExecution }) {
   const field = id => document.getElementById(id);
   const value = id => field(id).value.trim();
   const metadata = () => ({
@@ -75,7 +75,9 @@ export function attachLauncherPanel({ api, connectedAddress, sign }) {
     field('buy-result').textContent = 'Awaiting wallet signature and devnet simulation…';
     try {
       const signedTransactions = await sign(payload, payload.review.digest);
-      display('buy-result', await api('/api/verify', { reviewDigest: payload.review.digest, signedTransactions }));
+      const result = await api('/api/verify', { reviewDigest: payload.review.digest, signedTransactions });
+      display('buy-result', result);
+      showExecution(result, payload.review.details.plan);
     } catch (error) { field('buy-result').textContent = error.message; }
   });
   field('sell-form').addEventListener('submit', event => {

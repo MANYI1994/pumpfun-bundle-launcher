@@ -227,7 +227,7 @@ wallet and selected mint. It reads the Pump curve and fee configuration on devne
 and shows expected raw token units, minimum output after slippage and estimated
 trade fees. Network fees and account rent are separate. This initial quote supports
 standard incomplete SOL curves with the current account layout. The estimate expires
-after 15 seconds. Buy transaction construction, signing and submission are pending.
+after 15 seconds. The buy transaction review and execution controls are described below.
 
 The quote math follows the pinned Pump IDL and fee tier documentation.
 [Pump fee program](https://github.com/pump-fun/pump-public-docs/blob/639b87fb45c3adeffa6f7c4a1bf0cb85e392bf22/docs/FEE_PROGRAM_README.md)
@@ -239,12 +239,17 @@ configuration. The review includes the exact trade budget, minimum output, buyer
 signature requirement and transaction fingerprint. Network and account rent
 costs still need separate verification before execution. Curve conditions can
 change between review and execution, including crossing the migration threshold.
-Buy signing and submission remain pending.
+The signing and execution controls are described below.
 
 The Buy panel can also prepare an expiring wallet approval and simulate the
 signed candidate. Set an explicit total debit cap in lamports. The server checks
 the quoted message fee and reserve before requesting a signature, then checks
 the RPC simulation's payer balances against the cap. The debit calculation
 adds the reported network fee conservatively. RPC nodes that omit the balance
-evidence cannot complete this check. This flow ends at simulation. Buy submission
-and live wallet acceptance testing are pending.
+evidence cannot complete this check. In signing-only mode this flow ends at simulation. In journal-backed execution
+mode, successful buy simulation exposes the separate submission approval.
+The executor repeats its debit, fee, balance and reserve checks before sending
+the exact signed bytes. Recovery checks the original signature. The total debit
+cap is checked in simulation. The on-chain instruction enforces the trade budget
+and minimum token output, while fees and rent can depend on execution-time state.
+Live wallet acceptance testing remains deferred.

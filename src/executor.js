@@ -13,7 +13,7 @@ export class NativeTransferExecutor {
   }
   async prepare(verifiedBatch, confirmation) {
     const permit = claimVerifiedExecution(verifiedBatch, confirmation), d = inspectExecutionPermit(permit), tx = d.transactions[0];
-    this.#journal.create({ version: 1, id: d.plan.id, cluster: 'devnet', genesis: DEVNET_GENESIS, action: 'fund',
+    this.#journal.create({ version: 1, id: d.plan.id, cluster: 'devnet', genesis: DEVNET_GENESIS, action: d.plan.action,
       payerAddress: d.plan.payerAddress, signature: tx.signature, fingerprint: tx.fingerprint,
       executionDigest: d.executionDigest, planDigest: d.planDigest, lastValidBlockHeight: d.lastValidBlockHeight,
       createdAt: Date.now(), expiresAt: d.expiresAt });

@@ -72,29 +72,34 @@ $('sign').addEventListener('click', async () => {
     const result = await api('/api/verify', { reviewDigest: request.review.digest, signedTransactions: wires });
     if (current !== generation || !result.verified || result.broadcast !== false) throw new Error('VERIFICATION_FAILED');
     status('Signature verified: the expected wallet signed the exact reviewed transaction. Nothing was broadcast.');
-    if (result.executionEnabled) {
-      execution = { digest: result.executionDigest, id: result.operationId, ticket: null };
-      $('approve-send').checked = false;
-      const plan = request.review.details.plan;
-      $('execution-summary').textContent = `From: ${plan.payerAddress}\nTo: ${plan.wallets[0].address}\nLamports: ${plan.wallets[0].lamports}\nOperation: ${execution.id}`;
-      $('execution-section').hidden = false;
-    }
+    showExecution(result, request.review.details.plan);
   } catch (e) { status(`Signing did not complete: ${e.message}. Prepare a fresh review to try again.`); }
   finally { reset(); busy = false; render(); }
 });
+function showExecution(result, plan) {
+  if (!result.executionEnabled || session.address !== plan.payerAddress) return;
+  execution = { digest: result.executionDigest, id: result.operationId, ticket: null };
+  $('approve-send').checked = false;
+  const summary = plan.action === 'buy'
+    ? `Buy mint: ${plan.mint}\nWallet: ${plan.payerAddress}\nDestination: ${plan.destinationTokenAccount}\nTrade budget: ${plan.tradeBudgetLamports} lamports\nTotal debit cap checked in simulation: ${plan.maxDebitLamports} lamports\nMinimum token output: ${plan.minimumTokenAmountRaw} raw units`
+    : `From: ${plan.payerAddress}\nTo: ${plan.wallets[0].address}\nLamports: ${plan.wallets[0].lamports}`;
+  $('execution-summary').textContent = `${summary}\nOperation: ${execution.id}`;
+  $('execution-section').hidden = false;
+  render();
+}
 setInterval(() => {
   if (payload) $('expiry').textContent = `Review expires in ${Math.max(0, Math.ceil((payload.review.details.expiresAt - Date.now()) / 1000))} seconds. Prepare again if it expires.`;
   render();
 }, 500);
 $('simulate').addEventListener('click', async () => {
   if (!execution) return;
-  const current = generation; busy = true; render(); status('Simulating the unchanged signed transfer and checking the current budget…');
+  const current = generation; busy = true; render(); status('Simulating the unchanged signed transaction and checking the current budget…');
   try {
     const prepared = await api('/api/simulate', { executionDigest: execution.digest });
     if (!execution || current !== generation) throw new Error('WALLET_CHANGED');
     execution.ticket = prepared;
-    $('execution-summary').textContent += `\nFee: ${prepared.budget.feeLamports} lamports\nRemaining: ${prepared.budget.remainingLamports} lamports`;
-    status('Simulation passed. Check the transfer, then explicitly approve devnet submission.');
+    $('execution-summary').textContent += `\nSimulated total debit: ${prepared.budget.totalDebitLamports} lamports\nFee: ${prepared.budget.feeLamports} lamports\nRemaining: ${prepared.budget.remainingLamports} lamports`;
+    status('Simulation passed. Check the transaction, then explicitly approve devnet submission.');
   } catch (e) { execution = null; status(`Simulation unavailable: ${e.message}. Use saved-operation recovery before preparing again.`); }
   finally { busy = false; render(); }
 });
@@ -133,11 +138,11 @@ if (validSession) {
     executionEnabled = mode.executionEnabled;
     $('recovery-section').hidden = !executionEnabled;
     if (executionEnabled) {
-      $('intro').textContent = 'Devnet funding mode: connect, review, sign, simulate and explicitly submit. Use disposable test SOL only.';
-      $('footnote').textContent = 'Desktop extensions and native SOL funding only. Token creation, trades, Jito and mainnet execution are not enabled.';
+      $('intro').textContent = 'Devnet execution mode: connect, review, sign, simulate and explicitly submit. Use disposable test SOL only.';
+      $('footnote').textContent = 'Desktop wallet extensions. Execution supports native SOL funding and reviewed single-wallet Pump buys.';
     }
   }).catch(() => status('Session unavailable. Reopen the complete local session URL.'));
 }
 render();
 
-if (validSession) attachLauncherPanel({ api, connectedAddress: () => session.address, sign: (request, digest) => session.sign(request, digest) });
+if (validSession) attachLauncherPanel({ api, showExecution, connectedAddress: () => session.address, sign: (request, digest) => session.sign(request, digest) });

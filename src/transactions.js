@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   AccountRole, createTransactionMessage, setTransactionMessageFeePayer,
   setTransactionMessageLifetimeUsingBlockhash, appendTransactionMessageInstructions,
@@ -140,7 +141,7 @@ export async function prepareBuySigningReview(input, maxDebitLamports) {
   requireSafe(BigInt(candidate.tradeBudgetLamports) + BigInt(evidence.feeLamports) <= maxDebit, 'TRADE_AND_FEE_EXCEED_CAP');
   requireSafe(BigInt(evidence.balanceLamports) >= maxDebit + LIMITS.feeReserveLamports, 'INSUFFICIENT_BALANCE_OR_FEE_RESERVE');
   requireSafe(Date.now() < candidate.expiresAt, 'BUY_REVIEW_EXPIRED');
-  const plan = frozenJson({ ...candidate, maxDebitLamports });
+  const plan = frozenJson({ ...candidate, id: randomUUID(), payerAddress: candidate.owner, maxDebitLamports });
   return issueValidatedReview(plan, digest(plan), [tx], lifetime, context, evidence);
 }
 export function prepareOfflineFundingReview(envelope, confirmation, lifetime) {
@@ -229,7 +230,7 @@ export function claimVerifiedExecution(batch, confirmation) {
   const record = verifiedExecutions.get(batch);
   requireSafe(record && batch.productionVerified && equalDigest(confirmation, batch.executionDigest), 'EXECUTION_NOT_VERIFIED_OR_APPROVED');
   assertDevnetContext(record.context);
-  requireSafe(record.plan.action === 'fund' && record.execution.transactions.length === 1, 'EXECUTION_ROUTE_NOT_ENABLED');
+  requireSafe(['fund', 'buy'].includes(record.plan.action) && record.execution.transactions.length === 1, 'EXECUTION_ROUTE_NOT_ENABLED');
   verifiedExecutions.delete(batch);
   const permit = Object.freeze({ executionDigest: batch.executionDigest });
   executionPermits.set(permit, { ...record, used: false });

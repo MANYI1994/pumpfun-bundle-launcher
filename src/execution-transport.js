@@ -1,11 +1,12 @@
+import { buySimulationBudget } from './buy-simulation.js';
 import { getTransactionDecoder } from '@solana/kit';
 import { Rpc } from './network.js';
 import { inspectExecutionPermit, consumeExecutionPermit } from './transactions.js';
-import { enforceFundingBudget } from './plans.js';
+import { LIMITS, enforceFundingBudget } from './plans.js';
 import { ExecutionJournal } from './journal.js';
 import { frozenJson, requireSafe, SafetyError } from './security.js';
 const nativeFetch = globalThis.fetch.bind(globalThis);
-// This transport handles native funding only; no arbitrary instruction/send API.
+// Submission accepts only verified funding and buy permits.
 export class DevnetExecutionTransport {
   #rpc = new Rpc(); #proofs = new WeakMap(); #id = 0;
   get rpc() { return this.#rpc; }
@@ -20,10 +21,17 @@ export class DevnetExecutionTransport {
     const balance = await this.#rpc.read('getBalance', [d.plan.payerAddress]);
     requireSafe(Number.isSafeInteger(fee?.value) && fee.value >= 0 && Number.isSafeInteger(balance?.value) && balance.value >= 0, 'INVALID_FEE_OR_BALANCE_RESPONSE');
     requireSafe(String(fee.value) === d.budget.feeLamports, 'FEE_CHANGED_REVIEW_REQUIRED');
-    const budget = enforceFundingBudget(d.plan, { feeLamports: String(fee.value), balanceLamports: String(balance.value) });
+    if (d.plan.action === 'buy') {
+      requireSafe(BigInt(balance.value) >= BigInt(d.plan.maxDebitLamports) + LIMITS.feeReserveLamports,
+        'INSUFFICIENT_BALANCE_OR_FEE_RESERVE');
+    }
+
     const simulated = await this.#rpc.read('simulateTransaction', [tx.wireBase64, { encoding: 'base64', commitment: 'confirmed', sigVerify: true, replaceRecentBlockhash: false }]);
     requireSafe(simulated?.value && Object.hasOwn(simulated.value, 'err') && simulated.value.err === null && simulated.value.replacementBlockhash == null
       && Number.isSafeInteger(simulated.context?.slot) && simulated.context.slot >= 0, 'SIMULATION_REJECTED');
+    const budget = d.plan.action === 'buy'
+      ? buySimulationBudget(d.plan, String(fee.value), simulated)
+      : enforceFundingBudget(d.plan, { feeLamports: String(fee.value), balanceLamports: String(balance.value) });
     inspectExecutionPermit(permit);
     const proof = frozenJson({ executionDigest: d.executionDigest, signature: tx.signature, simulationSlot: simulated.context.slot,
       expiresAt: Math.min(d.expiresAt, Date.now() + 5000), budget });
@@ -37,7 +45,7 @@ export class DevnetExecutionTransport {
     const d = inspectExecutionPermit(record.permit), tx = d.transactions[0];
     const { intent } = journal.inspect(d.plan.id);
     requireSafe(intent.executionDigest === d.executionDigest && intent.signature === tx.signature && intent.fingerprint === tx.fingerprint
-      && intent.payerAddress === d.plan.payerAddress, 'JOURNAL_EXECUTION_MISMATCH');
+      && intent.action === d.plan.action && intent.payerAddress === d.plan.payerAddress, 'JOURNAL_EXECUTION_MISMATCH');
     this.#proofs.delete(proof);
     journal.decide(d.plan.id, 'attempting'); // Must succeed and fsync BEFORE any send.
     consumeExecutionPermit(record.permit);
