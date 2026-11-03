@@ -145,7 +145,9 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
         }
         return { address, spendLamports, maxDebitLamports, slippageBps };
       });
-      action(field('bundle-plan'), 'bundle-result', '/api/launch-bundle-plan', {
+      const compile = event.submitter?.value === 'transaction';
+      action(field(compile ? 'bundle-transaction' : 'bundle-plan'), 'bundle-result',
+        compile ? '/api/launch-bundle-transaction' : '/api/launch-bundle-plan', {
         creatorAddress: connectedAddress() || '', mintAddress: value('token-mint'),
         metadata: metadata(), metadataUri: value('token-uri'),
         creationMaxDebitLamports: value('creation-max-debit'), buyers,

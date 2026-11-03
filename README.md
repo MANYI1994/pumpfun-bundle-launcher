@@ -379,3 +379,11 @@ Block Engine submission are separate work. Jito's official endpoint list covers
 mainnet and testnet. The launcher's current execution transport uses devnet.
 
 [Jito bundle documentation](https://github.com/jito-labs/jito-docs/blob/main/docs/source/lowlatencytxnsend.md)
+
+**Compile unsigned bundle** refreshes the rehearsal quotes and builds the
+creation and buyer transactions in order against one devnet blockhash. The
+mint must be absent. Each buyer transaction includes its token-account setup,
+trade budget and minimum output. The review checks the exact message fees and
+payer balances against the configured caps and reserves. Rent and dependent
+execution still need joint simulation. These unsigned candidates have no Jito
+tip, signing flow or submission route.

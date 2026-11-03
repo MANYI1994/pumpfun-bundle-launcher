@@ -24,6 +24,15 @@ function ata(owner, program, mint) {
 }
 
 export async function compileSolTradeCandidate(review, rpc) {
+  return compileTrade(review, rpc);
+}
+
+export async function compileLaunchBuyCandidate(review, rpc, context) {
+  requireSafe(review.action === 'buy', 'UNSUPPORTED_TRADE_ACTION');
+  return compileTrade(review, rpc, context);
+}
+
+async function compileTrade(review, rpc, launchContext) {
   const isBuy = review.action === 'buy';
   requireSafe(isBuy || review.action === 'sell', 'UNSUPPORTED_TRADE_ACTION');
   const { owner, mint, curveAddress } = review;
@@ -35,8 +44,8 @@ export async function compileSolTradeCandidate(review, rpc) {
   ]);
   const [config, mintAccount, context] = await Promise.all([
     rpc.account(global, PUMP),
-    rpc.read('getAccountInfo', [mint, { encoding: 'base64', commitment: 'confirmed' }]),
-    rpc.getBlockhashContext(),
+    launchContext ? null : rpc.read('getAccountInfo', [mint, { encoding: 'base64', commitment: 'confirmed' }]),
+    launchContext ?? rpc.getBlockhashContext(),
   ]);
   requireSafe(config.length >= BUYBACK_OFFSET + 256 &&
     config.subarray(0, 8).equals(GLOBAL_TAG), 'UNSUPPORTED_GLOBAL_LAYOUT');
@@ -44,12 +53,7 @@ export async function compileSolTradeCandidate(review, rpc) {
   requireSafe(recipientBytes.some(byte => byte !== 0), 'MISSING_BUYBACK_RECIPIENT');
   const buyback = getBase58Decoder().decode(recipientBytes);
 
-  const account = mintAccount?.value;
-  requireSafe(account?.executable === false && [TOKEN, TOKEN_2022].includes(account.owner) &&
-    account.data?.[1] === 'base64' && typeof account.data[0] === 'string', 'INVALID_BASE_MINT');
-  const mintData = Buffer.from(account.data[0], 'base64');
-  requireSafe(mintData.length >= 82 && mintData[45] === 1, 'INVALID_BASE_MINT');
-  const program = account.owner;
+  const program = launchContext ? TOKEN_2022 : readBaseTokenProgram(mintAccount?.value);
   const [baseCurve, quoteCurve, baseUser, quoteUser] = await Promise.all([
     ata(curveAddress, program, mint), ata(curveAddress, TOKEN, WSOL),
     ata(owner, program, mint), ata(owner, TOKEN, WSOL),
@@ -98,6 +102,14 @@ export async function compileSolTradeCandidate(review, rpc) {
     unsignedWireBase64: getBase64EncodedWireTransaction(tx), signingAllowed: false,
   };
   return { candidate: frozenJson(candidate), tx, context };
+}
+
+function readBaseTokenProgram(account) {
+  requireSafe(account?.executable === false && [TOKEN, TOKEN_2022].includes(account.owner) &&
+    account.data?.[1] === 'base64' && typeof account.data[0] === 'string', 'INVALID_BASE_MINT');
+  const mintData = Buffer.from(account.data[0], 'base64');
+  requireSafe(mintData.length >= 82 && mintData[45] === 1, 'INVALID_BASE_MINT');
+  return account.owner;
 }
 
 export async function compileBuyCandidate(input, rpc = new Rpc()) {
