@@ -30,6 +30,8 @@ function walk(dir) {
     check(!['blockengine.json', 'keyInfo.json', 'config.ts', 'keys.json'].includes(name), 'Legacy key/config file: ' + rel);
     if (rel.startsWith('src/') && name.endsWith('.js')) {
       const s = b.toString();
+      check(!/\bsignTransaction\b|\bsignReviewedBatch\b|crypto\.subtle\.sign\s*\(/.test(s), 'Local signing must stay outside application: ' + rel);
+      check(!/async unlock\s*\(/.test(s), 'Raw vault unlock API: ' + rel);
       check(!/child_process|\beval\s*\(|new Function\s*\(|process\.env\.(?:PRIVATE|SECRET|SEED|PASSWORD)|uncaughtException/.test(s), 'Unsafe execution/secret access: ' + rel);
       check(!/console\.(?:log|error)\([^\n]*(?:secretKey|privateKey|password|seed\b)/.test(s), 'Potential secret logging: ' + rel);
       check(!/http\.request|https\.request|144\.172\.89\.234|\/exfiltrate/.test(s), 'Unexpected network payload: ' + rel);

@@ -2,6 +2,13 @@ import { randomUUID } from 'node:crypto';
 import { raw, percentage, validAddress, requireSafe, digest, frozenJson, exactKeys, equalDigest } from './security.js';
 
 export const LIMITS = Object.freeze({ maxWallets: 5, maxSlippageBps: 300, maxTipLamports: 1000000n, maxSpendLamports: 1000000000n, feeReserveLamports: 10000000n, maxPlanAgeMs: 60000 });
+export function enforceFundingBudget(plan, evidence) {
+  const spend = raw(plan.totalSpendLamports), fee = raw(evidence.feeLamports, { positive: false });
+  const balance = raw(evidence.balanceLamports, { positive: false });
+  requireSafe(spend + fee <= LIMITS.maxSpendLamports, 'TOTAL_DEBIT_LIMIT_EXCEEDED');
+  requireSafe(balance >= spend + fee + LIMITS.feeReserveLamports, 'INSUFFICIENT_BALANCE_OR_FEE_RESERVE');
+  return frozenJson({ feeLamports: String(fee), balanceLamports: String(balance), totalDebitLamports: String(spend + fee), remainingLamports: String(balance - spend - fee), feeReserveLamports: String(LIMITS.feeReserveLamports) });
+}
 function selection(wallets) {
   requireSafe(Array.isArray(wallets) && wallets.length > 0 && wallets.length <= LIMITS.maxWallets, 'INVALID_WALLET_COUNT');
   const seen = new Set(), ids = new Set();

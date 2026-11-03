@@ -7,6 +7,13 @@ import { readRegularFile } from './files.js';
 
 const KDF = Object.freeze({ name: 'scrypt', N: 32768, r: 8, p: 1 });
 const ID = /^[a-z][a-z0-9-]{0,47}$/;
+function trustedDirectory(stat) {
+  const owned = stat.uid === 0 || stat.uid === process.getuid();
+  const writable = (stat.mode & 0o022) !== 0;
+  // Root-owned sticky directories such as /tmp are safe ancestors, not vault roots.
+  const stickyRoot = stat.uid === 0 && (stat.mode & 0o1000) !== 0;
+  requireSafe(stat.isDirectory() && !stat.isSymbolicLink() && owned && (!writable || stickyRoot), 'UNSAFE_VAULT_ANCESTOR');
+}
 function privateStat(stat) {
   requireSafe(stat.uid === process.getuid() && (stat.mode & 0o077) === 0, 'UNSAFE_FILE_PERMISSIONS');
 }
@@ -17,7 +24,7 @@ export function prepareRoot(root) {
   let part = path.parse(root).root;
   for (const component of root.slice(part.length).split(path.sep).filter(Boolean)) {
     part = path.join(part, component);
-    try { requireSafe(!lstatSync(part).isSymbolicLink(), 'SYMLINK_NOT_ALLOWED'); }
+    try { const stat = lstatSync(part); requireSafe(!stat.isSymbolicLink(), 'SYMLINK_NOT_ALLOWED'); trustedDirectory(stat); }
     catch (e) { if (e.code !== 'ENOENT') throw e; mkdirSync(part, { mode: 0o700 }); }
   }
   const stat = lstatSync(root); requireSafe(stat.isDirectory(), 'INVALID_VAULT_DIRECTORY'); privateStat(stat);
@@ -74,6 +81,7 @@ export class Vault {
     for (const component of this.#root.slice(part.length).split(path.sep).filter(Boolean)) {
       part = path.join(part, component);
       requireSafe(!lstatSync(part).isSymbolicLink(), 'SYMLINK_NOT_ALLOWED');
+      trustedDirectory(lstatSync(part));
     }
     const stat = lstatSync(this.#root, { bigint: true });
     requireSafe(stat.isDirectory() && stat.dev === this.#identity.dev && stat.ino === this.#identity.ino, 'VAULT_DIRECTORY_REPLACED');
@@ -131,7 +139,7 @@ export class Vault {
       return header;
     } finally { seed.fill(0); }
   }
-  async unlock(id, password) {
+  async verifyPassword(id, password) {
     requireSafe(typeof id === 'string' && ID.test(id), 'INVALID_WALLET_ID');
     const h = this.list().find(w => w.id === id); requireSafe(h, 'WALLET_NOT_REGISTERED');
     const payload = JSON.parse(readPrivate(path.join(this.root, id + '.vault')));
@@ -145,7 +153,8 @@ export class Vault {
       seed = Buffer.concat([partial, final]);
       const signer = await createKeyPairSignerFromPrivateKeyBytes(seed);
       requireSafe(signer.address === h.address, 'KEY_ADDRESS_MISMATCH');
-      return signer;
+      // Never return a signer or a private-key handle to the application.
+      return Object.freeze({ id: h.id, role: h.role, address: h.address, authenticated: true });
     } catch { throw new SafetyError('VAULT_AUTHENTICATION_FAILED'); }
     finally { derived.fill(0); partial?.fill(0); final?.fill(0); seed?.fill(0); }
   }

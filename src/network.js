@@ -1,19 +1,30 @@
-import { requireSafe, SafetyError, validAddress, canonical, frozenJson } from './security.js';
+import { requireSafe, SafetyError, validAddress, canonical, frozenJson, raw } from './security.js';
+const nativeFetch = globalThis.fetch.bind(globalThis);
 
 export const DEVNET_GENESIS = 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG';
 const ALLOWED_RPC = 'api.devnet.solana.com';
-const READ_METHODS = new Set(['getGenesisHash', 'getBalance', 'getAccountInfo', 'getSignatureStatuses', 'getLatestBlockhash']);
+const READ_METHODS = new Set(['getGenesisHash', 'getBalance', 'getAccountInfo', 'getSignatureStatuses', 'getLatestBlockhash', 'getFeeForMessage']);
 const issuedContexts = new WeakMap();
 export function assertDevnetContext(context) {
   const issued = issuedContexts.get(context);
-  requireSafe(issued && Date.now() >= issued.observedAt && Date.now() < issued.expiresAt, 'UNVERIFIED_OR_EXPIRED_BLOCKHASH_CONTEXT');
-  return { blockhash: issued.blockhash, lastValidBlockHeight: BigInt(issued.lastValidBlockHeight) };
+  requireSafe(issued && issued.production && Date.now() >= context.observedAt && Date.now() < context.expiresAt, 'UNVERIFIED_OR_EXPIRED_BLOCKHASH_CONTEXT');
+  return { blockhash: context.blockhash, lastValidBlockHeight: BigInt(context.lastValidBlockHeight) };
+}
+export async function fundingBudgetEvidence(context, payer, messageBase64) {
+  assertDevnetContext(context);
+  const { rpc } = issuedContexts.get(context);
+  const fee = await rpc.read('getFeeForMessage', [messageBase64, { commitment: 'confirmed' }]);
+  const balance = await rpc.read('getBalance', [payer]);
+  requireSafe(Number.isSafeInteger(fee?.value) && fee.value >= 0 && Number.isSafeInteger(balance?.value) && balance.value >= 0, 'INVALID_FEE_OR_BALANCE_RESPONSE');
+  assertDevnetContext(context);
+  return { feeLamports: String(fee.value), balanceLamports: String(balance.value) };
 }
 function validateParams(method, params) {
   requireSafe(Array.isArray(params), 'INVALID_RPC_PARAMETERS');
   if (method === 'getGenesisHash') requireSafe(params.length === 0, 'INVALID_RPC_PARAMETERS');
   if (method === 'getBalance') { requireSafe(params.length === 1, 'INVALID_RPC_PARAMETERS'); validAddress(params[0]); }
   if (method === 'getLatestBlockhash') requireSafe(params.length === 1 && canonical(params[0]) === canonical({ commitment: 'confirmed' }), 'INVALID_RPC_PARAMETERS');
+  if (method === 'getFeeForMessage') requireSafe(params.length === 2 && typeof params[0] === 'string' && params[0].length <= 1644 && Buffer.from(params[0], 'base64').toString('base64') === params[0] && canonical(params[1]) === canonical({ commitment: 'confirmed' }), 'INVALID_RPC_PARAMETERS');
   if (method === 'getAccountInfo') {
     requireSafe(params.length === 2 && canonical(params[1]) === canonical({ encoding: 'base64', commitment: 'confirmed' }), 'INVALID_RPC_PARAMETERS'); validAddress(params[0]);
   }
@@ -21,11 +32,12 @@ function validateParams(method, params) {
 }
 
 export class Rpc {
-  #url; #fetch; #id = 0; #verified = false;
-  constructor({ url = 'https://api.devnet.solana.com', fetchImpl = globalThis.fetch } = {}) {
+  #url; #fetch; #production; #id = 0; #verified = false;
+  constructor({ url = 'https://api.devnet.solana.com', fetchImpl } = {}) {
     let u; try { u = new URL(url); } catch { throw new SafetyError('INVALID_RPC_ENDPOINT'); }
     requireSafe(u.protocol === 'https:' && u.hostname === ALLOWED_RPC && !u.username && !u.password && !u.port && u.pathname === '/' && !u.search && !u.hash, 'RPC_ENDPOINT_NOT_ALLOWED');
-    this.#url = u.href; this.#fetch = fetchImpl;
+    this.#url = u.href; this.#production = fetchImpl === undefined;
+    this.#fetch = fetchImpl === undefined ? nativeFetch : fetchImpl;
   }
   async #request(method, params) {
     const id = ++this.#id;
@@ -64,7 +76,7 @@ export class Rpc {
     requireSafe(Number.isSafeInteger(result.value.lastValidBlockHeight) && result.value.lastValidBlockHeight > 0, 'INVALID_BLOCKHASH_LIFETIME');
     const now = Date.now();
     const context = frozenJson({ cluster: 'devnet', genesis: DEVNET_GENESIS, blockhash: result.value.blockhash, lastValidBlockHeight: String(result.value.lastValidBlockHeight), observedAt: now, expiresAt: now + 30000 });
-    issuedContexts.set(context, context);
+    issuedContexts.set(context, { production: this.#production, rpc: this });
     return context;
   }
   async send() {

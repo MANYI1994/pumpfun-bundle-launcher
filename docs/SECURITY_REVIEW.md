@@ -20,7 +20,7 @@ This is not a declaration that no code-related risk exists. It records what was 
 | Echoed private-key prompt | Removed. No seed/key import CLI. Hidden passphrase entry restores terminal settings and rejects noninteractive input. |
 | Excessive max purchase cost | Old buy implementation removed. No executable purchase path exists. A new bounded, quoted buy integration remains to be implemented. |
 | Zero minimum sell proceeds | Planner rejects zero/minimum-rounded-to-zero output, limits slippage and tips, and records externally supplied quotes as unverified. No unverified plan can be broadcast. |
-| Missing developer/buyer signatures | Old consolidation removed; independent unsigned curve candidates retain each actual owner role. Reviewed funding signing rejects missing, duplicate or extra signers and verifies actual Ed25519 signatures. Unverified curve signing is blocked. |
+| Missing developer/buyer signatures | Old consolidation removed; independent unsigned curve candidates retain each actual owner role. External funding-signature verification rejects missing, extra or invalid signatures and checks actual Ed25519 signatures. Unverified curve signing is blocked. |
 | Random transaction fee payer | Removed. Funding uses explicit payer; each independent offline sell uses its owner. |
 | Unsafe old Raydium route/Flash | Removed, with no reachable fallback. PumpSwap/migration integration remains blocked. |
 | Wrong pool/curve/mint | Offline builder validates expected owner/mint/PDA, route and selected amounts. These caller-provided states are not certified on-chain data; production state acquisition is a blocker. |
@@ -35,7 +35,7 @@ This is not a declaration that no code-related risk exists. It records what was 
 ## Verification evidence
 
 - `npm ci --ignore-scripts` installs the reviewed locked dependency set without lifecycle scripts.
-- `npm test`: 49 behavioral/adversarial tests cover startup access, amount parsing, plan tampering/expiry, selection, encrypted storage, passwords/ciphertext/metadata/KDF tampering, permissions/symlinks/orphans/locks/directory replacement, bounded nonblocking reads, terminal privacy, exact-message single-use approval, signer completeness and cryptographic verification, verified blockhash contexts, input mutation during asynchronous work, endpoint/cluster/method/parameter restrictions, response bounds and failed/unknown/finalized settlement. The complete devnet genesis pin was checked against the public RPC's `getGenesisHash` response.
+- `npm test`: 52 behavioral/adversarial tests cover startup access, amount parsing, plan tampering/expiry, selection, encrypted storage, passwords/ciphertext/metadata/KDF tampering, permissions/symlinks/orphans/locks/directory replacement, bounded nonblocking reads, terminal privacy, exact-message single-use approval, signer completeness and cryptographic verification, verified blockhash contexts, input mutation during asynchronous work, endpoint/cluster/method/parameter restrictions, response bounds and failed/unknown/finalized settlement. The complete devnet genesis pin was checked against the public RPC's `getGenesisHash` response.
 - `npm run check`: static repository/dependency policy checks pass. This is a limited deterministic regression screen, not a general malware detector.
 - `npm audit --json`: zero info/low/moderate/high/critical advisories at audit time.
 - All 47 new dependency archive records retrieved and matched their lockfile integrity; 1,400 JS/TS/JSON/shell text file entries screened, zero oversize exclusions, zero lifecycle declarations. Two network/key-word co-occurrences are in kit's browser bundles, which combine legitimate RPC and cryptographic implementations. Targeted inspection found no configuration-copy/exfiltration payload or startup network behavior. Node resolves the kit node ESM entrypoint.
@@ -56,7 +56,7 @@ No original application code or original dependency installation script was run.
 
 A reviewer must confirm the current official protocol interface and a complete disposable-key integration test must pass before introducing submission. That gate must show final decoded instructions/recipients, expected signer set, exact approved message bytes, authenticated fresh quotes/accounts, maximum total debit including rent/fees/tips, positive minimum proceeds, correct cluster, expiry handling and verified settlement. A self-supplied plan hash alone is insufficient authorization for a future executor.
 
-## Second remediation pass
+## Second remediation pass (historical; superseded by the third pass below)
 
 The first preview's checks were not a claim that all defects had been eliminated. A follow-up source review found and corrected these additional gaps:
 
@@ -74,3 +74,21 @@ The first preview's checks were not a claim that all defects had been eliminated
 | Settlement could return a different caller-mutated signature list, or accept malformed status data | Signatures/results are immutable snapshots, finalized status requires explicit error/status fields, non-null errors fail, and polling has a monotonic default clock plus an absolute poll-count bound. |
 
 No runtime dependency was added or changed during this pass. Published credentials in old history remain unusable; provider-side revocation still belongs to their actual account owner. No private key or funded wallet was used, and no on-chain write was performed.
+
+
+## Third remediation pass — external signatures and enforced funding budgets
+
+The four gaps from the follow-up control audit are addressed as follows:
+
+| Finding | Current correction |
+|---|---|
+| Unlocked key handles could bypass the application approval wrapper | Removed `Vault.unlock` and all application local-signing functions/imports. Password authentication returns public metadata only. The application can verify externally generated signatures but cannot create them through its API. A hardware/Phantom adapter is still not implemented. |
+| Injected mock RPC could issue a supposedly production context | Context records distinguish native transport from injected transport. Production funding approval rejects every injected transport context, even if its genesis/blockhash responses look correct. Offline reviews have a separate non-production label. |
+| Fee reserve was metadata rather than an enforced budget | Production review obtains `getFeeForMessage` for the exact compiled message plus the payer balance, checks transfer plus fee against the total-debit limit, and rejects any balance that would leave less than the reserve. Null, malformed or unavailable fee/balance responses fail closed. |
+| A vault could be placed below an unsafe shared directory | Reject ancestors that are symlinks, owned by an untrusted UID or group/world writable without a root-owned sticky-directory exception. Repeat validation during operations; reject before creating a vault beneath an unsafe ancestor. |
+
+The suite now has 52 tests, including external signature integrity, caller mutation during verification, forged/replayed signatures, production rejection of mock transports, debit/fee/reserve arithmetic, writable-ancestor refusal and permissions changing after construction. No dependency was added.
+
+This removes application signing capabilities rather than claiming that software wrappers isolate a key from malware in the same process. The vault utility still transiently handles seed/password material for creation and authentication; compromised runtime/root/same-user code remains outside its protection. Real funds must use a separately trusted external wallet, whose actual integration remains a release blocker. Production funding review is read-only and cannot broadcast. Its budget evidence is only valid at review time and must be refreshed by any future executor.
+
+The previous passes are retained as history, not descriptions of an available local-signing API. There is no promise of zero risk or a complete token creation/trading implementation. No real keys, funded wallets, deployment changes or on-chain writes were used.

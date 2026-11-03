@@ -1,12 +1,12 @@
 import {
   AccountRole, createTransactionMessage, setTransactionMessageFeePayer,
   setTransactionMessageLifetimeUsingBlockhash, appendTransactionMessageInstructions,
-  compileTransaction, signTransaction, assertIsFullySignedTransaction,
+  compileTransaction, assertIsFullySignedTransaction,
   getBase64EncodedWireTransaction, getAddressEncoder, getProgramDerivedAddress,
 } from '@solana/kit';
 import { raw, requireSafe, validAddress, digest, frozenJson, equalDigest } from './security.js';
-import { validateEnvelope, LIMITS } from './plans.js';
-import { assertDevnetContext } from './network.js';
+import { validateEnvelope, LIMITS, enforceFundingBudget } from './plans.js';
+import { assertDevnetContext, fundingBudgetEvidence } from './network.js';
 
 export const SYSTEM = '11111111111111111111111111111111';
 export const TOKEN = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
@@ -70,28 +70,17 @@ export async function compileCurveSells(envelope, confirmation, lifetime, state,
   requireSafe(transactions.length <= LIMITS.maxWallets, 'BUNDLE_TOO_LARGE');
   return transactions;
 }
-async function signComplete(transaction, signers) {
-  const expected = Object.keys(transaction.signatures).sort();
-  requireSafe(Array.isArray(signers) && new Set(signers.map(s => s.address)).size === signers.length && signers.map(s => s.address).sort().join(',') === expected.join(','), 'SIGNER_SET_MISMATCH');
-  const signed = await signTransaction(signers.map(s => s.keyPair), transaction);
-  assertIsFullySignedTransaction(signed);
-  for (const owner of expected) {
-    const publicKey = await crypto.subtle.importKey('raw', bytes(owner), 'Ed25519', false, ['verify']);
-    requireSafe(await crypto.subtle.verify('Ed25519', publicKey, signed.signatures[owner], signed.messageBytes), 'INVALID_TRANSACTION_SIGNATURE');
-  }
-  return bounded(signed);
-}
 export function transactionFingerprint(transaction) { return digest({ message: Buffer.from(transaction.messageBytes).toString('base64'), signers: Object.keys(transaction.signatures) }); }
 
 // Only reviews issued by this module can be signed. Serialized hashes alone are
 // not capabilities: raw caller-supplied transaction objects are never accepted.
 const pendingReviews = new WeakMap();
-function issueReview(envelope, transactions, lifetime, context = null) {
+function issueReview(envelope, transactions, lifetime, context = null, budget = null) {
   const plan = validateEnvelope(envelope, envelope.digest);
   const details = {
     version: 1, cluster: 'devnet', plan, planDigest: envelope.digest,
     expiresAt: context ? Math.min(plan.expiresAt, context.expiresAt) : plan.expiresAt,
-    signingAllowed: Boolean(context) && plan.action === 'fund',
+    signingAllowed: false, verificationAllowed: plan.action === 'fund', productionVerified: Boolean(context), budget,
     blockhash: lifetime.blockhash, lastValidBlockHeight: String(lifetime.lastValidBlockHeight),
     transactions: transactions.map(tx => ({ messageBase64: Buffer.from(tx.messageBytes).toString('base64'), requiredSigners: Object.keys(tx.signatures).sort(), fingerprint: transactionFingerprint(tx) })),
     broadcast: false,
@@ -100,10 +89,18 @@ function issueReview(envelope, transactions, lifetime, context = null) {
   pendingReviews.set(review, { transactions, context });
   return review;
 }
-export function prepareFundingReview(envelope, confirmation, context) {
+export async function prepareFundingReview(envelope, confirmation, context) {
+  const approved = frozenJson(envelope);
   const snapshot = Object.freeze(assertDevnetContext(context));
-  const tx = compileFunding(envelope, confirmation, snapshot);
-  return issueReview(envelope, [tx], snapshot, context);
+  const tx = compileFunding(approved, confirmation, snapshot);
+  const evidence = await fundingBudgetEvidence(context, approved.plan.payerAddress, Buffer.from(tx.messageBytes).toString('base64'));
+  const budget = enforceFundingBudget(approved.plan, evidence);
+  assertDevnetContext(context);
+  return issueReview(approved, [tx], snapshot, context, budget);
+}
+export function prepareOfflineFundingReview(envelope, confirmation, lifetime) {
+  const snapshot = Object.freeze({ blockhash: lifetime.blockhash, lastValidBlockHeight: lifetime.lastValidBlockHeight });
+  return issueReview(envelope, [compileFunding(envelope, confirmation, snapshot)], snapshot);
 }
 export async function prepareCurveSellReview(envelope, confirmation, lifetime, state) {
   const snapshot = Object.freeze({ blockhash: lifetime.blockhash, lastValidBlockHeight: lifetime.lastValidBlockHeight });
@@ -112,25 +109,41 @@ export async function prepareCurveSellReview(envelope, confirmation, lifetime, s
   const txs = await compileCurveSells(approved, confirmation, snapshot, state);
   return issueReview(approved, txs, snapshot);
 }
-export async function signReviewedBatch(review, confirmation, signers) {
+export async function verifyReviewedBatch(review, confirmation, signedTransactions) {
   const issued = pendingReviews.get(review);
   requireSafe(issued && equalDigest(confirmation, review.digest) && equalDigest(review.digest, digest(review.details)), 'REVIEW_NOT_ISSUED_OR_UNAPPROVED');
-  requireSafe(review.details.signingAllowed && review.details.plan.action === 'fund', 'UNVERIFIED_TRADE_SIGNING_DISABLED');
+  requireSafe(review.details.verificationAllowed && review.details.plan.action === 'fund', 'UNVERIFIED_TRADE_SIGNING_DISABLED');
   const { transactions, context } = issued;
-  assertDevnetContext(context);
+  if (context) assertDevnetContext(context);
   requireSafe(Date.now() < review.details.expiresAt, 'REVIEW_EXPIRED');
-  const expected = [...new Set(transactions.flatMap(tx => Object.keys(tx.signatures)))].sort();
-  requireSafe(Array.isArray(signers) && signers.length === expected.length && new Set(signers.map(s => s.address)).size === signers.length && signers.map(s => s.address).sort().join(',') === expected.join(','), 'SIGNER_SET_MISMATCH');
-  requireSafe(transactions.every((tx, i) => transactionFingerprint(tx) === review.details.transactions[i].fingerprint), 'TRANSACTION_CHANGED_AFTER_REVIEW');
-  // Consume before the first async signing operation to reject concurrent/replay use.
+  requireSafe(Array.isArray(signedTransactions) && signedTransactions.length === transactions.length, 'TRANSACTION_COUNT_MISMATCH');
+  // Copy all untrusted bytes before any asynchronous verification.
+  const snapshots = signedTransactions.map((input, i) => {
+    const expected = transactions[i];
+    requireSafe(input?.messageBytes instanceof Uint8Array && Buffer.from(input.messageBytes).equals(Buffer.from(expected.messageBytes)), 'MESSAGE_DIFFERS_FROM_REVIEW');
+    const required = Object.keys(expected.signatures).sort();
+    requireSafe(input.signatures && Object.keys(input.signatures).sort().join(',') === required.join(','), 'SIGNER_SET_MISMATCH');
+    const signatures = {};
+    for (const owner of required) {
+      requireSafe(input.signatures[owner] instanceof Uint8Array && input.signatures[owner].length === 64, 'MISSING_OR_INVALID_SIGNATURE');
+      signatures[owner] = new Uint8Array(input.signatures[owner]);
+    }
+    return { ...expected, messageBytes: new Uint8Array(expected.messageBytes), signatures };
+  });
   pendingReviews.delete(review);
-  const result = [];
-  for (const tx of transactions) {
-    assertDevnetContext(context);
+  const output = [];
+  for (const tx of snapshots) {
+    if (context) assertDevnetContext(context);
     requireSafe(Date.now() < review.details.expiresAt, 'REVIEW_EXPIRED');
-    result.push(await signComplete(tx, signers.filter(s => Object.hasOwn(tx.signatures, s.address))));
+    for (const [owner, signature] of Object.entries(tx.signatures)) {
+      const publicKey = await crypto.subtle.importKey('raw', bytes(owner), 'Ed25519', false, ['verify']);
+      requireSafe(await crypto.subtle.verify('Ed25519', publicKey, signature, tx.messageBytes), 'INVALID_TRANSACTION_SIGNATURE');
+    }
+    assertIsFullySignedTransaction(tx);
+    bounded(tx);
+    output.push({ wireBase64: getBase64EncodedWireTransaction(tx), fingerprint: transactionFingerprint(tx) });
   }
+  if (context) assertDevnetContext(context);
   requireSafe(Date.now() < review.details.expiresAt, 'REVIEW_EXPIRED');
-  assertDevnetContext(context);
-  return result;
+  return frozenJson({ transactions: output, productionVerified: Boolean(context), broadcast: false });
 }

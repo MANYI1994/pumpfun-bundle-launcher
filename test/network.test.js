@@ -67,7 +67,7 @@ test('blockhash contexts require cluster verification and a validated lifetime r
   } });
   const context = await rpc.getBlockhashContext();
   assert.deepEqual(calls, ['getGenesisHash', 'getLatestBlockhash']);
-  assert.equal(assertDevnetContext(context).lastValidBlockHeight, 10n);
+  assert.throws(() => assertDevnetContext(context), /UNVERIFIED_OR_EXPIRED/);
   assert.throws(() => assertDevnetContext(structuredClone(context)), /UNVERIFIED_OR_EXPIRED/);
   const bad = new Rpc({ fetchImpl: async (_u, o) => { const p = JSON.parse(o.body); return response(p.id, p.method === 'getGenesisHash' ? DEVNET_GENESIS : { value: { blockhash: '11111111111111111111111111111111', lastValidBlockHeight: -1 } }); } });
   await assert.rejects(bad.getBlockhashContext(), /INVALID_BLOCKHASH_LIFETIME/);
