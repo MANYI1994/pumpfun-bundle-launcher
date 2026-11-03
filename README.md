@@ -214,3 +214,10 @@ The metadata builder works locally. Hosting and verification that the hosted byt
 match the manifest are separate. Creation signing, submission and inspection of
 the resulting mint authorities remain pending. The funding executor accepts
 only its existing native funding route. Live acceptance testing remains deferred.
+
+The local wallet page also includes metadata and unsigned creation review forms,
+wallet connection controls, and live devnet monitoring for SOL and associated
+token accounts. The sell panel reads the selected wallet's current associated
+token balance and uses an externally supplied quote to prepare a review.
+Creation and sell execution are pending. The funding panel keeps its own review
+and approval flow.

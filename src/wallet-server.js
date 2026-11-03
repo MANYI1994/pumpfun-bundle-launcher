@@ -1,3 +1,4 @@
+import { PANEL_ROUTES, launcherPanel } from './launcher-panel.js';
 import http from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -10,7 +11,7 @@ import { Rpc } from './network.js';
 import { prepareFundingReview, externalSigningPayload, verifySignedWireBatch } from './transactions.js';
 import { exactKeys, requireSafe, shortError } from './security.js';
 
-const ASSETS = Object.freeze({ '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/wallet.js': ['wallet.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] });
+const ASSETS = Object.freeze({ '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/wallet.js': ['wallet.js', 'text/javascript'], '/launcher-panel.js': ['launcher-panel.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] });
 async function jsonBody(req) {
   requireSafe(req.headers['content-type'] === 'application/json', 'JSON_REQUIRED');
   const chunks = []; let size = 0;
@@ -42,7 +43,7 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
       if (req.method === 'GET' && assets.has(req.url)) {
         const asset = assets.get(req.url); res.writeHead(200, { 'content-type': asset.mime + '; charset=utf-8' }); res.end(asset.bytes); return;
       }
-      requireSafe(req.method === 'POST' && ['/api/review', '/api/verify', '/api/cancel', '/api/mode', '/api/simulate', '/api/submit', '/api/recover', '/api/operations'].includes(req.url), 'ROUTE_NOT_ALLOWED');
+      requireSafe(req.method === 'POST' && ['/api/review', '/api/verify', '/api/cancel', '/api/mode', '/api/simulate', '/api/submit', '/api/recover', '/api/operations', ...PANEL_ROUTES].includes(req.url), 'ROUTE_NOT_ALLOWED');
       const supplied = req.headers['x-launcher-session'];
       requireSafe(req.headers.origin === origin && typeof supplied === 'string' && /^[a-f0-9]{64}$/.test(supplied)
         && timingSafeEqual(Buffer.from(token), Buffer.from(supplied)), 'SESSION_OR_ORIGIN_REJECTED');
@@ -55,7 +56,9 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
       }
       requireSafe(!busy, 'REQUEST_IN_PROGRESS'); busy = true;
       try {
-        if (req.url === '/api/review') {
+        if (PANEL_ROUTES.includes(req.url)) {
+          respond(200, await launcherPanel(req.url, body));
+        } else if (req.url === '/api/review') {
           requireSafe(!ticket, 'EXISTING_EXECUTION_REQUIRES_RECOVERY');
           active = null; verified = null; const current = ++revision;
           exactKeys(body, ['payerAddress', 'destinationAddress', 'lamports']);

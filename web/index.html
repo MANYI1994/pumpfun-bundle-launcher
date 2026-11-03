@@ -1,12 +1,46 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Launcher · Wallet signing test</title><link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pump launcher · Devnet</title><link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script></head>
 <body><main>
-<p class="badge">DEVNET · SIGNATURE TEST</p><h1>Connect, review, sign.</h1>
+<p class="badge">SOLANA DEVNET</p><h1>Token launcher</h1>
 <p id="intro">Verify your wallet can sign the exact transfer you approve. Nothing is sent to the blockchain in signing-only mode.</p>
 <section><h2>1. Connect your wallet</h2><p>Use a disposable devnet account with test SOL. Your wallet keeps your private keys.</p>
 <label for="wallets">Available wallets</label><select id="wallets"><option value="">Looking for compatible wallets…</option></select>
 <div class="actions"><button id="connect" disabled>Connect wallet</button><button id="disconnect" class="secondary" disabled>Disconnect</button></div>
 <p id="account">No wallet connected.</p></section>
+<section>
+<h2>Token metadata and creation</h2>
+<form id="creation-form">
+<label for="token-name">Name</label><input id="token-name" required maxlength="32">
+<label for="token-symbol">Ticker</label><input id="token-symbol" required maxlength="10">
+<label for="token-description">Description</label><textarea id="token-description" required maxlength="1000"></textarea>
+<label for="token-image">Hosted image URL</label><input id="token-image" type="url" required maxlength="200">
+<button id="metadata-build" type="button">Generate metadata JSON</button>
+<label for="token-uri">Hosted metadata JSON URL</label><input id="token-uri" type="url" required maxlength="200">
+<label for="token-mint">Fresh mint public address</label><input id="token-mint" required maxlength="44">
+<button id="creation-review">Prepare unsigned creation review</button>
+</form>
+<pre id="creation-result" aria-live="polite"></pre>
+</section>
+<section>
+<h2>Wallet balances</h2>
+<label for="monitor-owner">Public wallet address (blank uses connected wallet)</label><input id="monitor-owner" maxlength="44">
+<label for="monitor-mint">Token mint (optional)</label><input id="monitor-mint" maxlength="44">
+<button id="monitor-start">Start monitoring</button>
+<button id="monitor-stop" class="secondary">Stop monitoring</button>
+<p>Refreshes every 15 seconds while the tab is visible. Token amounts are raw units in associated token accounts.</p>
+<pre id="balance-result" aria-live="polite"></pre>
+</section>
+<section>
+<h2>Sell review</h2>
+<p>Uses the wallet and mint above. Supply a quote for the chosen percentage. The review is for inspection.</p>
+<form id="sell-form">
+<label for="sell-percent">Percentage of token balance</label><input id="sell-percent" required value="25" maxlength="6" inputmode="decimal">
+<label for="sell-slippage">Slippage in basis points</label><input id="sell-slippage" type="number" required min="1" max="300" value="100">
+<label for="sell-quote">Quoted proceeds in lamports</label><input id="sell-quote" required maxlength="20" inputmode="numeric">
+<button id="sell-review">Prepare sell review</button>
+</form>
+<pre id="sell-result" aria-live="polite"></pre>
+</section>
 <section><h2>2. Prepare a transfer</h2><form id="form">
 <label for="destination">Recipient public address</label><input id="destination" autocomplete="off" spellcheck="false" required maxlength="44">
 <label for="amount">Amount in lamports <small>1 SOL = 1,000,000,000 lamports</small></label><input id="amount" inputmode="numeric" value="1000000" pattern="[1-9][0-9]*" required maxlength="10">

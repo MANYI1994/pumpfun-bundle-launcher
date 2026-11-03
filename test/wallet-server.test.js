@@ -7,7 +7,7 @@ test('wallet server serves only local assets and protects all API calls with ori
   const server = await startWalletServer({ port: 0 }); t.after(() => server.close());
   const token = new URLSearchParams(new URL(server.url).hash.slice(1)).get('session');
   const home = await fetch(server.origin);
-  assert.equal(home.status, 200); assert.match(await home.text(), /Connect, review, sign/);
+  assert.equal(home.status, 200); assert.match(await home.text(), /Token launcher/);
   assert.match(home.headers.get('content-security-policy'), /frame-ancestors 'none'/);
   assert.equal(home.headers.get('cache-control'), 'no-store');
   for (const p of ['/package.json', '/src/vault.js', '/api/verify', '/app.js?x=1']) assert.equal((await fetch(server.origin + p)).status, 400);

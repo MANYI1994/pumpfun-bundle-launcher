@@ -1,3 +1,4 @@
+import { attachLauncherPanel } from "./launcher-panel.js";
 import { discoverWallets, WalletSession } from './wallet.js';
 const $ = id => document.getElementById(id);
 const token = new URLSearchParams(location.hash.slice(1)).get('session');
@@ -138,3 +139,5 @@ if (validSession) {
   }).catch(() => status('Session unavailable. Reopen the complete local session URL.'));
 }
 render();
+
+if (validSession) attachLauncherPanel({ api, connectedAddress: () => session.address });
