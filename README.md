@@ -274,3 +274,9 @@ reserve and that the simulated net SOL gain meets the reviewed minimum after
 a conservative network fee deduction. The on-chain instruction enforces its
 minimum trade output. The net wallet gain can vary with fees and rent.
 The original signature is journaled for recovery. Live acceptance testing is deferred.
+
+Select **Collect SOL to a destination** in the transfer panel to review an
+exact native SOL transfer from the connected wallet. The source pays the fee
+and retains the configured 0.01 SOL reserve. Execution mode supports one
+collection source per approval and tracks the original signature for recovery.
+Wrapped SOL and token-account rent recovery are separate cleanup operations.

@@ -40,7 +40,7 @@ $('wallets').addEventListener('change', render);
 $('approve').addEventListener('change', render);
 $('approve-send').addEventListener('change', render);
 $('operations').addEventListener('change', render);
-for (const id of ['destination', 'amount']) $(id).addEventListener('input', () => { execution = null; $('execution-section').hidden = true; reset(); });
+for (const id of ['destination', 'amount', 'transfer-kind']) $(id).addEventListener('input', () => { execution = null; $('execution-section').hidden = true; reset(); });
 $('connect').addEventListener('click', async () => {
   busy = true; render(); status('Approve the wallet connection.');
   try { await session.connect(wallets[Number($('wallets').value) - 1]); status('Connected. Enter the recipient and test amount.'); }
@@ -53,10 +53,13 @@ $('form').addEventListener('submit', async event => {
   try {
     if (executionEnabled) await api('/api/cancel', {});
     execution = null; $('execution-section').hidden = true;
-    const result = await api('/api/review', { payerAddress: session.address, destinationAddress: $('destination').value, lamports: $('amount').value });
+    const route = $('transfer-kind').value === 'collect' ? '/api/collection-review' : '/api/review';
+    const result = await api(route, { payerAddress: session.address, destinationAddress: $('destination').value, lamports: $('amount').value });
     if (current !== generation || result.expectedAddress !== session.address) throw new Error('WALLET_CHANGED');
     payload = result; const d = result.review.details, p = d.plan;
-    const entries = [['Network', 'Solana devnet'], ['From', p.payerAddress], ['To', p.wallets[0].address], ['Lamports', p.wallets[0].lamports], ['Fee', d.budget.feeLamports], ['Remaining', d.budget.remainingLamports], ['Review hash', result.review.digest]];
+    const collecting = p.action === 'collect';
+    const budget = collecting ? d.budget[0] : d.budget;
+    const entries = [['Network', 'Solana devnet'], ['Purpose', collecting ? 'Collect SOL' : 'Fund wallet'], ['From', result.expectedAddress], ['To', collecting ? p.destinationAddress : p.wallets[0].address], ['Lamports', p.wallets[0].lamports], ['Fee', budget.feeLamports], ['Remaining', budget.remainingLamports], ['Review hash', result.review.digest]];
     $('summary').replaceChildren();
     for (const [label, value] of entries) { const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = label; dd.textContent = value; $('summary').append(dt, dd); }
     $('review-section').hidden = false; status('Review the transfer, then approve signing. Nothing will be broadcast.');
@@ -77,14 +80,15 @@ $('sign').addEventListener('click', async () => {
   finally { reset(); busy = false; render(); }
 });
 function showExecution(result, plan) {
-  if (!result.executionEnabled || session.address !== plan.payerAddress) return;
+  const payer = plan.action === 'collect' ? plan.wallets[0].address : plan.payerAddress;
+  if (!result.executionEnabled || session.address !== payer) return;
   execution = { digest: result.executionDigest, id: result.operationId, ticket: null };
   $('approve-send').checked = false;
   const summary = plan.action === 'buy'
     ? `Buy mint: ${plan.mint}\nWallet: ${plan.payerAddress}\nDestination: ${plan.destinationTokenAccount}\nTrade budget: ${plan.tradeBudgetLamports} lamports\nTotal debit cap checked in simulation: ${plan.maxDebitLamports} lamports\nMinimum token output: ${plan.minimumTokenAmountRaw} raw units`
     : plan.action === 'sell'
       ? `Sell mint: ${plan.mint}\nWallet: ${plan.payerAddress}\nSource: ${plan.sourceTokenAccount}\nToken amount: ${plan.amountRaw} raw units\nMinimum SOL proceeds: ${plan.minimumOutputLamports} lamports\nProceeds wallet: ${plan.proceedsAddress}`
-      : `From: ${plan.payerAddress}\nTo: ${plan.wallets[0].address}\nLamports: ${plan.wallets[0].lamports}`;
+      : `Purpose: ${plan.action === 'collect' ? 'Collect SOL' : 'Fund wallet'}\nFrom: ${payer}\nTo: ${plan.destinationAddress ?? plan.wallets[0].address}\nLamports: ${plan.wallets[0].lamports}`;
   $('execution-summary').textContent = `${summary}\nOperation: ${execution.id}`;
   $('execution-section').hidden = false;
   render();
@@ -144,7 +148,7 @@ if (validSession) {
     $('recovery-section').hidden = !executionEnabled;
     if (executionEnabled) {
       $('intro').textContent = 'Devnet execution mode: connect, review, sign, simulate and explicitly submit. Use disposable test SOL only.';
-      $('footnote').textContent = 'Desktop wallet extensions. Execution supports native SOL funding and reviewed single-wallet Pump buys and sells.';
+      $('footnote').textContent = 'Desktop wallet extensions. Execution supports native SOL funding and collection, and reviewed single-wallet Pump buys and sells.';
     }
   }).catch(() => status('Session unavailable. Reopen the complete local session URL.'));
 }

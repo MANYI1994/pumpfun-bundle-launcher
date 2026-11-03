@@ -57,7 +57,9 @@
 </form>
 <pre id="sell-result" aria-live="polite"></pre>
 </section>
-<section><h2>2. Prepare a transfer</h2><form id="form">
+<section><h2>2. Fund or collect SOL</h2><form id="form">
+<label for="transfer-kind">Transfer purpose</label>
+<select id="transfer-kind"><option value="fund">Fund a wallet</option><option value="collect">Collect SOL to a destination</option></select>
 <label for="destination">Recipient public address</label><input id="destination" autocomplete="off" spellcheck="false" required maxlength="44">
 <label for="amount">Amount in lamports <small>1 SOL = 1,000,000,000 lamports</small></label><input id="amount" inputmode="numeric" value="1000000" pattern="[1-9][0-9]*" required maxlength="10">
 <button id="prepare" disabled>Prepare review</button></form></section>

@@ -5,11 +5,11 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fundingPlan } from './plans.js';
+import { collectionPlan, fundingPlan } from './plans.js';
 import { ExecutionJournal } from './journal.js';
 import { NativeTransferExecutor } from './executor.js';
 import { Rpc } from './network.js';
-import { prepareBuySigningReview, prepareSellSigningReview, prepareFundingReview, externalSigningPayload, verifySignedWireBatch } from './transactions.js';
+import { prepareBuySigningReview, prepareSellSigningReview, prepareFundingReview, prepareCollectionReview, externalSigningPayload, verifySignedWireBatch } from './transactions.js';
 import { exactKeys, requireSafe, shortError } from './security.js';
 
 const ASSETS = Object.freeze({ '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/wallet.js': ['wallet.js', 'text/javascript'], '/launcher-panel.js': ['launcher-panel.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] });
@@ -44,7 +44,7 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
       if (req.method === 'GET' && assets.has(req.url)) {
         const asset = assets.get(req.url); res.writeHead(200, { 'content-type': asset.mime + '; charset=utf-8' }); res.end(asset.bytes); return;
       }
-      requireSafe(req.method === 'POST' && ['/api/review', '/api/buy-signing-review', '/api/sell-signing-review', '/api/verify', '/api/cancel', '/api/mode', '/api/simulate', '/api/submit', '/api/recover', '/api/operations', ...PANEL_ROUTES].includes(req.url), 'ROUTE_NOT_ALLOWED');
+      requireSafe(req.method === 'POST' && ['/api/review', '/api/collection-review', '/api/buy-signing-review', '/api/sell-signing-review', '/api/verify', '/api/cancel', '/api/mode', '/api/simulate', '/api/submit', '/api/recover', '/api/operations', ...PANEL_ROUTES].includes(req.url), 'ROUTE_NOT_ALLOWED');
       const supplied = req.headers['x-launcher-session'];
       requireSafe(req.headers.origin === origin && typeof supplied === 'string' && /^[a-f0-9]{64}$/.test(supplied)
         && timingSafeEqual(Buffer.from(token), Buffer.from(supplied)), 'SESSION_OR_ORIGIN_REJECTED');
@@ -59,13 +59,19 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
       try {
         if (PANEL_ROUTES.includes(req.url)) {
           respond(200, await launcherPanel(req.url, body));
-        } else if (req.url === '/api/review') {
+        } else if (['/api/review', '/api/collection-review'].includes(req.url)) {
           requireSafe(!ticket, 'EXISTING_EXECUTION_REQUIRES_RECOVERY');
           active = null; verified = null; const current = ++revision;
           exactKeys(body, ['payerAddress', 'destinationAddress', 'lamports']);
-          const envelope = fundingPlan({ payerAddress: body.payerAddress, wallets: [{ id: 'wallet-test', address: body.destinationAddress, lamports: body.lamports }] });
+          const collecting = req.url === '/api/collection-review';
+          const envelope = collecting
+            ? collectionPlan({ destinationAddress: body.destinationAddress,
+                wallets: [{ id: 'source-wallet', address: body.payerAddress, lamports: body.lamports }] })
+            : fundingPlan({ payerAddress: body.payerAddress,
+                wallets: [{ id: 'wallet-test', address: body.destinationAddress, lamports: body.lamports }] });
           const context = await new Rpc().getBlockhashContext();
-          const review = await prepareFundingReview(envelope, envelope.digest, context);
+          const prepareReview = collecting ? prepareCollectionReview : prepareFundingReview;
+          const review = await prepareReview(envelope, envelope.digest, context);
           const payload = externalSigningPayload(review, review.digest, body.payerAddress);
           requireSafe(current === revision, 'REVIEW_CANCELLED');
           active = review; respond(200, payload);

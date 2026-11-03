@@ -206,7 +206,16 @@ export async function verifyReviewedBatch(review, confirmation, signedTransactio
   const execution = frozenJson({ version: 1, cluster: 'devnet', planDigest: review.details.planDigest,
     expiresAt: review.details.expiresAt, lastValidBlockHeight: review.details.lastValidBlockHeight, transactions: output });
   const result = frozenJson({ transactions: output, productionVerified: Boolean(context), broadcast: false, executionDigest: digest(execution) });
-  verifiedExecutions.set(result, { context, execution, plan: review.details.plan, budget: review.details.budget });
+  const { plan, budget } = review.details;
+  if (plan.action === 'collect' && plan.wallets.length === 1 && context) {
+    verifiedExecutions.set(result, {
+      context, execution,
+      plan: frozenJson({ ...plan, payerAddress: plan.wallets[0].address }),
+      budget: budget[0],
+    });
+  } else {
+    verifiedExecutions.set(result, { context, execution, plan, budget });
+  }
   return result;
 }
 
@@ -242,7 +251,7 @@ export function claimVerifiedExecution(batch, confirmation) {
   const record = verifiedExecutions.get(batch);
   requireSafe(record && batch.productionVerified && equalDigest(confirmation, batch.executionDigest), 'EXECUTION_NOT_VERIFIED_OR_APPROVED');
   assertDevnetContext(record.context);
-  requireSafe(['fund', 'buy', 'sell'].includes(record.plan.action) && record.execution.transactions.length === 1, 'EXECUTION_ROUTE_NOT_ENABLED');
+  requireSafe(['fund', 'buy', 'sell', 'collect'].includes(record.plan.action) && record.execution.transactions.length === 1, 'EXECUTION_ROUTE_NOT_ENABLED');
   verifiedExecutions.delete(batch);
   const permit = Object.freeze({ executionDigest: batch.executionDigest });
   executionPermits.set(permit, { ...record, used: false });

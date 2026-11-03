@@ -137,31 +137,34 @@ test('processed/confirmed errors are not treated as final failures; finalized er
   assert.equal((await executor.recover(id)).state, 'failed'); assert.equal(sends(), 1);
 });
 
-test('execution-mode HTTP API requires simulation and separate approval; normal mode still cannot send', async t => {
-  const { root } = setup(t), { owner } = await approved();
-  const { startWalletServer } = await import('../src/wallet-server.js');
-  const server = await startWalletServer({ port: 0, journalRoot: root }); t.after(() => server.close());
-  const native = originalFetch;
-  const token = new URLSearchParams(new URL(server.url).hash.slice(1)).get('session');
-  const post = async (route, data) => {
-    const res = await native(server.origin + route, { method: 'POST', headers: { origin: server.origin, 'x-launcher-session': token, 'content-type': 'application/json' }, body: JSON.stringify(data) });
-    return { status: res.status, data: await res.json() };
-  };
-  assert.equal((await post('/api/mode', {})).data.executionEnabled, true);
-  assert.equal((await post('/api/submit', { executionDigest: '0'.repeat(64) })).status, 400);
-  const review = (await post('/api/review', { payerAddress: owner.address, destinationAddress: 'So11111111111111111111111111111111111111112', lamports: '1000000' })).data;
-  const signed = await signTransaction([owner.keyPair], getTransactionDecoder().decode(Buffer.from(review.unsignedTransactions[0], 'base64')));
-  scenario.wire = getBase64EncodedWireTransaction(signed);
-  const verified = (await post('/api/verify', { reviewDigest: review.review.digest, signedTransactions: [scenario.wire] })).data;
-  scenario.signature = (await import('@solana/kit')).getSignatureFromTransaction(signed);
-  scenario.operationId = verified.operationId;
-  const prepared = await post('/api/simulate', { executionDigest: verified.executionDigest });
-  assert.equal(prepared.status, 200); assert.equal(sends(), 0);
-  const sent = await post('/api/submit', { executionDigest: verified.executionDigest });
-  assert.equal(sent.status, 200); assert.equal(sent.data.state, 'accepted'); assert.equal(sends(), 1);
-  assert.equal((await post('/api/submit', { executionDigest: verified.executionDigest })).status, 400);
-  scenario.status = { slot: 55, err: null, confirmationStatus: 'finalized' };
-  assert.equal((await post('/api/recover', { operationId: verified.operationId })).data.state, 'finalized');
-  assert.equal((await post('/api/operations', {})).data.operations[0].state, 'finalized');
-  assert.equal(sends(), 1);
-});
+for (const [action, route] of [['fund', '/api/review'], ['collect', '/api/collection-review']]) {
+  test(`execution-mode HTTP ${action} requires simulation and separate approval`, async t => {
+    const { root } = setup(t), { owner } = await approved();
+    const { startWalletServer } = await import('../src/wallet-server.js');
+    const server = await startWalletServer({ port: 0, journalRoot: root }); t.after(() => server.close());
+    const native = originalFetch;
+    const token = new URLSearchParams(new URL(server.url).hash.slice(1)).get('session');
+    const post = async (route, data) => {
+      const res = await native(server.origin + route, { method: 'POST', headers: { origin: server.origin, 'x-launcher-session': token, 'content-type': 'application/json' }, body: JSON.stringify(data) });
+      return { status: res.status, data: await res.json() };
+    };
+    assert.equal((await post('/api/mode', {})).data.executionEnabled, true);
+    assert.equal((await post('/api/submit', { executionDigest: '0'.repeat(64) })).status, 400);
+    const review = (await post(route, { payerAddress: owner.address, destinationAddress: 'So11111111111111111111111111111111111111112', lamports: '1000000' })).data;
+    assert.equal(review.review.details.plan.action, action);
+    const signed = await signTransaction([owner.keyPair], getTransactionDecoder().decode(Buffer.from(review.unsignedTransactions[0], 'base64')));
+    scenario.wire = getBase64EncodedWireTransaction(signed);
+    const verified = (await post('/api/verify', { reviewDigest: review.review.digest, signedTransactions: [scenario.wire] })).data;
+    scenario.signature = (await import('@solana/kit')).getSignatureFromTransaction(signed);
+    scenario.operationId = verified.operationId;
+    const prepared = await post('/api/simulate', { executionDigest: verified.executionDigest });
+    assert.equal(prepared.status, 200); assert.equal(sends(), 0);
+    const sent = await post('/api/submit', { executionDigest: verified.executionDigest });
+    assert.equal(sent.status, 200); assert.equal(sent.data.state, 'accepted'); assert.equal(sends(), 1);
+    assert.equal((await post('/api/submit', { executionDigest: verified.executionDigest })).status, 400);
+    scenario.status = { slot: 55, err: null, confirmationStatus: 'finalized' };
+    assert.equal((await post('/api/recover', { operationId: verified.operationId })).data.state, 'finalized');
+    assert.equal((await post('/api/operations', {})).data.operations[0].state, 'finalized');
+    assert.equal(sends(), 1);
+  });
+}
