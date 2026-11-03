@@ -1,3 +1,4 @@
+import { buildSellTransaction } from './sell-transaction.js';
 import { buildBuyTransaction } from './buy-transaction.js';
 import { reviewBuy } from './buy-review.js';
 import { balances } from './wallet-balances.js';
@@ -6,9 +7,10 @@ import { Rpc, assertDevnetContext } from './network.js';
 import { exactKeys, requireSafe } from './security.js';
 import { tokenMetadata, reviewTokenCreation } from './create-token.js';
 
-export const PANEL_ROUTES = Object.freeze(['/api/metadata', '/api/create-review', '/api/balances', '/api/sell-review', '/api/buy-review', '/api/buy-transaction']);
+export const PANEL_ROUTES = Object.freeze(['/api/metadata', '/api/create-review', '/api/balances', '/api/sell-review', '/api/sell-transaction', '/api/buy-review', '/api/buy-transaction']);
 
 export async function launcherPanel(route, input) {
+  if (route === '/api/sell-transaction') return buildSellTransaction(input);
   if (route === '/api/buy-transaction') return buildBuyTransaction(input);
   if (route === '/api/buy-review') return reviewBuy(input);
   if (route === '/api/metadata') return tokenMetadata(input);

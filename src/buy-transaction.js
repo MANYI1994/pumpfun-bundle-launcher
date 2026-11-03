@@ -23,8 +23,9 @@ function ata(owner, program, mint) {
   return pda(ASSOCIATED, [bytes(owner), bytes(program), bytes(mint)]);
 }
 
-export async function compileBuyCandidate(input, rpc = new Rpc()) {
-  const { review } = await reviewBuy(input, rpc);
+export async function compileSolTradeCandidate(review, rpc) {
+  const isBuy = review.action === 'buy';
+  requireSafe(isBuy || review.action === 'sell', 'UNSUPPORTED_TRADE_ACTION');
   const { owner, mint, curveAddress } = review;
   const [global, feeConfig, volume, eventAuthority] = await Promise.all([
     pda(PUMP, [Buffer.from('global')]),
@@ -61,11 +62,21 @@ export async function compileBuyCandidate(input, rpc = new Rpc()) {
     accounts: metas([[owner, S], [baseUser, W], [owner, R], [mint, R], [SYSTEM, R], [program, R]]),
     data: Uint8Array.of(1),
   };
-  const data = Buffer.alloc(25);
-  Buffer.from([225, 247, 80, 30, 213, 179, 132, 136]).copy(data);
-  data.writeBigUInt64LE(BigInt(review.tradeBudgetLamports), 8);
-  data.writeBigUInt64LE(BigInt(review.minimumTokenAmountRaw), 16);
-  const buy = {
+  if (!isBuy) {
+    requireSafe(baseUser === review.sourceTokenAccount && program === review.baseTokenProgram,
+      'SELL_SOURCE_ACCOUNT_MISMATCH');
+  }
+  const data = Buffer.alloc(isBuy ? 25 : 24);
+  if (isBuy) {
+    Buffer.from([225, 247, 80, 30, 213, 179, 132, 136]).copy(data);
+    data.writeBigUInt64LE(BigInt(review.tradeBudgetLamports), 8);
+    data.writeBigUInt64LE(BigInt(review.minimumTokenAmountRaw), 16);
+  } else {
+    Buffer.from([28, 146, 222, 119, 38, 196, 105, 213]).copy(data);
+    data.writeBigUInt64LE(BigInt(review.amountRaw), 8);
+    data.writeBigUInt64LE(BigInt(review.minimumOutputLamports), 16);
+  }
+  const trade = {
     programAddress: PUMP,
     accounts: metas([
       [global, R], [mint, R], [WSOL, R], [program, R], [TOKEN, R],
@@ -76,16 +87,22 @@ export async function compileBuyCandidate(input, rpc = new Rpc()) {
     data,
   };
   const lifetime = assertDevnetContext(context);
-  requireSafe(Date.now() < review.expiresAt, 'BUY_REVIEW_EXPIRED');
-  const tx = bounded(compileTransaction(message(owner, lifetime, [createAta, buy])));
+  requireSafe(Date.now() < review.expiresAt, 'TRADE_REVIEW_EXPIRED');
+  const tx = bounded(compileTransaction(message(owner, lifetime, isBuy ? [createAta, trade] : [trade])));
   const candidate = {
-    ...review, instruction: 'buy_exact_quote_in_v3', baseTokenProgram: program,
-    destinationTokenAccount: baseUser, buybackFeeRecipient: buyback,
+    ...review, instruction: isBuy ? 'buy_exact_quote_in_v3' : 'sell_v3',
+    baseTokenProgram: program, buybackFeeRecipient: buyback,
+    ...(isBuy ? { destinationTokenAccount: baseUser } : { proceedsAddress: owner }),
     blockhash: lifetime.blockhash, lastValidBlockHeight: String(lifetime.lastValidBlockHeight),
     requiredSigners: Object.keys(tx.signatures), fingerprint: transactionFingerprint(tx),
     unsignedWireBase64: getBase64EncodedWireTransaction(tx), signingAllowed: false,
   };
   return { candidate: frozenJson(candidate), tx, context };
+}
+
+export async function compileBuyCandidate(input, rpc = new Rpc()) {
+  const { review } = await reviewBuy(input, rpc);
+  return compileSolTradeCandidate(review, rpc);
 }
 
 export async function buildBuyTransaction(input, rpc = new Rpc()) {

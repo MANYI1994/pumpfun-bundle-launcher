@@ -80,12 +80,17 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
       showExecution(result, payload.review.details.plan);
     } catch (error) { field('buy-result').textContent = error.message; }
   });
+  const sellInput = () => ({
+    owner: connectedAddress() || '', mint: value('monitor-mint'),
+    percent: value('sell-percent'), slippageBps: Number(value('sell-slippage')),
+  });
   field('sell-form').addEventListener('submit', event => {
     event.preventDefault();
-    action(field('sell-review'), 'sell-result', '/api/sell-review', {
-      owner: connectedAddress() || '', mint: value('monitor-mint'),
-      percent: value('sell-percent'), slippageBps: Number(value('sell-slippage')),
-    });
+    action(field('sell-review'), 'sell-result', '/api/sell-review', sellInput());
+  });
+  field('sell-transaction').addEventListener('click', () => {
+    if (!field('sell-form').reportValidity()) return;
+    action(field('sell-transaction'), 'sell-result', '/api/sell-transaction', sellInput());
   });
   let timer;
   let revision = 0;

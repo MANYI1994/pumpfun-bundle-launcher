@@ -261,3 +261,10 @@ The review expires after 15 seconds. It supports standard incomplete SOL curves
 and one funded, unfrozen associated token account. The legacy CLI sell planner
 continues to accept external quotes. Sell transaction construction and execution
 are pending.
+
+**Build unsigned sell review** refreshes the sell estimate and builds a Pump
+`sell_v3` candidate. It uses the selected associated token account and encodes
+the reviewed raw token amount and minimum SOL proceeds. The review displays
+the seller as the proceeds address and required signer. This flow produces
+an unsigned review. Sell signature verification, simulation and submission
+remain pending.
