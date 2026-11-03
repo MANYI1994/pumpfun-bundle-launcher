@@ -326,3 +326,10 @@ rebuilds the creation message, checks both required signatures, and saves the
 combined wire to a new owner-only file. This is an offline check. Blockhash
 freshness, metadata publication, browser signing and submission still need
 integration.
+
+For browser creation signing, connect the creator and prepare the creation
+review. Sign with the connected account, switch accounts in the extension,
+then connect the remaining signer and sign the same review. Both signatures
+must arrive before the review expires. The server rebuilds the reviewed
+message, checks the signatures and confirms that the blockhash is valid on
+devnet. Creation simulation and submission are separate follow-up work.

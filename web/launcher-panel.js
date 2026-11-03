@@ -1,3 +1,5 @@
+import { fromBase64, toBase64 } from './wallet.js';
+
 export function attachLauncherPanel({ api, connectedAddress, sign, showExecution }) {
   const field = id => document.getElementById(id);
   const value = id => field(id).value.trim();
@@ -20,12 +22,74 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
   field('metadata-build').addEventListener('click', event => {
     action(event.currentTarget, 'creation-result', '/api/metadata', metadata());
   });
-  field('creation-form').addEventListener('submit', event => {
+  let creation;
+  let creationRevision = 0;
+  const creationSign = field('creation-sign');
+  function clearCreation() {
+    creation = undefined;
+    creationRevision++;
+    creationSign.disabled = true;
+  }
+  field('creation-form').addEventListener('input', clearCreation);
+  field('creation-form').addEventListener('submit', async event => {
     event.preventDefault();
-    action(field('creation-review'), 'creation-result', '/api/create-review', {
-      metadata: metadata(), metadataUri: value('token-uri'), mintAddress: value('token-mint'),
-      creatorAddress: connectedAddress() || '',
-    });
+    clearCreation();
+    const revision = creationRevision;
+    const button = field('creation-review');
+    button.disabled = true;
+    field('creation-result').textContent = 'Preparing creation review…';
+    try {
+      const { expiresAt, ...envelope } = await api('/api/create-review', {
+        metadata: metadata(), metadataUri: value('token-uri'), mintAddress: value('token-mint'),
+        creatorAddress: connectedAddress() || '',
+      });
+      if (revision !== creationRevision) return;
+      creation = { envelope, expiresAt, signatures: new Map() };
+      const { unsignedWireBase64, ...summary } = envelope.review;
+      display('creation-result', { ...summary, digest: envelope.digest, expiresAt: new Date(expiresAt).toISOString() });
+      creationSign.disabled = false;
+    } catch (error) { field('creation-result').textContent = error.message; }
+    finally { button.disabled = false; }
+  });
+  creationSign.addEventListener('click', async () => {
+    const current = creation;
+    if (!current) return;
+    const owner = connectedAddress();
+    const { review, digest } = current.envelope;
+    if (!review.requiredSigners.includes(owner) || current.signatures.has(owner)) {
+      field('creation-result').textContent = 'Connect the remaining mint or creator account.';
+      return;
+    }
+    creationSign.disabled = true;
+    try {
+      const unsigned = fromBase64(review.unsignedWireBase64);
+      const payload = { chain: 'solana:devnet', expectedAddress: owner, unsignedTransactions: [review.unsignedWireBase64],
+        review: { digest, details: {
+          cluster: 'devnet', productionVerified: true, verificationAllowed: true, broadcast: false,
+          plan: { action: 'create' }, expiresAt: current.expiresAt,
+          transactions: [{ messageBase64: toBase64(unsigned.subarray(129)), requiredSigners: review.requiredSigners }],
+        } } };
+      const [wire] = await sign(payload, digest);
+      if (creation !== current) return;
+      current.signatures.set(owner, wire);
+      const remaining = review.requiredSigners.filter(address => !current.signatures.has(address));
+      if (remaining.length) {
+        display('creation-result', { signedBy: [...current.signatures.keys()], remaining });
+        return;
+      }
+      const result = await api('/api/create-verify', {
+        envelope: current.envelope, confirmation: digest, signedWires: [...current.signatures.values()],
+      });
+      if (creation === current) {
+        clearCreation();
+        display('creation-result', result);
+      }
+    } catch (error) {
+      if (creation === current) {
+        if (current.signatures.size === 2) clearCreation();
+        field('creation-result').textContent = error.message;
+      }
+    } finally { creationSign.disabled = !creation; }
   });
   const buyInput = () => ({
     owner: connectedAddress() || '', mint: value('monitor-mint'),
