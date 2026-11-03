@@ -395,3 +395,10 @@ the signed messages in order against the active review and returns a receipt.
 Signatures must arrive before the shared review expires, which may make
 manual wallet switching impractical for a full bundle. Joint simulation and
 Jito submission remain separate work.
+
+Creation and bundle signing reviews have a local window of up to 60 seconds.
+The bundle quote must still be fresh when compiling. Once compiled, the signed
+message fixes the spend and output floor. The dashboard shows the remaining
+signers and time and disables the signing button for other accounts. A
+blockhash can expire before the local window, so final verification still
+checks it on devnet. Compile a new review if the window expires.

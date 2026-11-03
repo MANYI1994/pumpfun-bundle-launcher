@@ -89,7 +89,7 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
           const { maxDebitLamports, ...input } = body;
           requireSafe(raw(maxDebitLamports) <= LIMITS.maxSpendLamports, 'TOTAL_DEBIT_LIMIT_EXCEEDED');
           pendingCreation = undefined;
-          const context = await new Rpc().getBlockhashContext();
+          const context = await new Rpc().getBlockhashContext({ reviewLifetimeMs: 60000 });
           const envelope = await reviewTokenCreation(input, assertDevnetContext(context));
           assertDevnetContext(context);
           pendingCreation = { envelope, context, maxDebitLamports };

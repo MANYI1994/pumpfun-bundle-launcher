@@ -89,7 +89,7 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
       creation = { envelope, expiresAt, maxDebitLamports, signatures: new Map() };
       const { unsignedWireBase64, ...summary } = envelope.review;
       display('creation-result', { ...summary, maxDebitLamports, digest: envelope.digest, expiresAt: new Date(expiresAt).toISOString() });
-      creationSign.disabled = false;
+      renderSigningStatus();
     } catch (error) { field('creation-result').textContent = error.message; }
     finally { button.disabled = false; }
   });
@@ -102,7 +102,8 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
       field('creation-result').textContent = 'Connect the remaining mint or creator account.';
       return;
     }
-    creationSign.disabled = true;
+    current.signing = true;
+    renderSigningStatus();
     try {
       const unsigned = fromBase64(review.unsignedWireBase64);
       const payload = { chain: 'solana:devnet', expectedAddress: owner, unsignedTransactions: [review.unsignedWireBase64],
@@ -132,7 +133,7 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
         if (current.signatures.size === 2) clearCreation();
         field('creation-result').textContent = error.message;
       }
-    } finally { creationSign.disabled = !creation; }
+    } finally { current.signing = false; renderSigningStatus(); }
   });
   let bundle;
   let bundleRevision = 0;
@@ -173,7 +174,7 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
         display('bundle-result', { ...review, digest: result.digest,
           transactions: transactions.map(({ unsignedWireBase64, ...step }) => step),
           nextSigners: transactions[0].requiredSigners });
-        bundleSign.disabled = false;
+        renderSigningStatus();
       } else display('bundle-result', result);
     } catch (error) { if (revision === bundleRevision) field('bundle-result').textContent = error.message; }
     finally { button.disabled = false; }
@@ -190,7 +191,8 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
         nextSigners: tx.requiredSigners.filter(address => !signatures.has(address)) });
       return;
     }
-    bundleSign.disabled = true;
+    current.signing = true;
+    renderSigningStatus();
     try {
       const wire = fromBase64(tx.unsignedWireBase64);
       const messageOffset = 1 + 64 * tx.requiredSigners.length;
@@ -219,8 +221,31 @@ export function attachLauncherPanel({ api, connectedAddress, sign, showExecution
       }
     } catch (error) {
       field('bundle-result').textContent = error.message;
-    } finally { bundleSign.disabled = !bundle; }
+    } finally { current.signing = false; renderSigningStatus(); }
   });
+  function renderSigningStatus() {
+    const now = Date.now();
+    const connected = connectedAddress();
+    const render = (button, statusId, current, expiresAt, required, signed) => {
+      if (!current) {
+        button.disabled = true;
+        field(statusId).textContent = '';
+        return;
+      }
+      const seconds = Math.max(0, Math.ceil((expiresAt - now) / 1000));
+      const remaining = required.filter(address => !signed.has(address));
+      button.disabled = !seconds || current.signing || !remaining.includes(connected);
+      field(statusId).textContent = seconds
+        ? `${seconds}s to sign · Remaining: ${remaining.join(', ')}`
+        : 'Signing window expired. Prepare a fresh review.';
+    };
+    render(creationSign, 'creation-signing-status', creation, creation?.expiresAt,
+      creation?.envelope.review.requiredSigners, creation?.signatures);
+    const step = bundle?.review.transactions[bundle.index];
+    render(bundleSign, 'bundle-signing-status', bundle, bundle?.review.expiresAt,
+      step?.requiredSigners, bundle?.signatures[bundle.index]);
+  }
+  setInterval(renderSigningStatus, 500);
   const buyInput = () => ({
     owner: connectedAddress() || '', mint: value('monitor-mint'),
     spendLamports: value('buy-budget'), slippageBps: Number(value('buy-slippage')),

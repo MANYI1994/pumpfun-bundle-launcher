@@ -8,7 +8,7 @@ import { digest, frozenJson, requireSafe } from './security.js';
 
 export async function buildLaunchBundle(input, rpc = new Rpc()) {
   const { plan } = await planLaunchBundle(input, rpc);
-  const context = await rpc.getBlockhashContext();
+  const context = await rpc.getBlockhashContext({ reviewLifetimeMs: 60000 });
   const lifetime = assertDevnetContext(context);
   const mint = await rpc.read('getAccountInfo', [plan.mintAddress, { encoding: 'base64', commitment: 'confirmed' }]);
   requireSafe(mint?.value === null, 'BUNDLE_MINT_ALREADY_EXISTS');
@@ -44,9 +44,9 @@ export async function buildLaunchBundle(input, rpc = new Rpc()) {
         buybackFeeRecipient: candidate.buybackFeeRecipient } : { bondingCurve: creation.bondingCurve }) };
   }));
   assertDevnetContext(context);
-  const expiresAt = Math.min(plan.expiresAt, context.expiresAt);
-  requireSafe(Date.now() < expiresAt, 'BUNDLE_REVIEW_EXPIRED');
-  const review = { ...plan, mode: 'unsigned-bundle-rehearsal', expiresAt,
+  requireSafe(Date.now() < plan.expiresAt, 'BUNDLE_REVIEW_EXPIRED');
+  const review = { ...plan, mode: 'unsigned-bundle-rehearsal',
+    quoteExpiresAt: plan.expiresAt, expiresAt: context.expiresAt,
     blockhash: lifetime.blockhash, lastValidBlockHeight: String(lifetime.lastValidBlockHeight),
     transactions, rentVerified: false, signingAllowed: false, broadcast: false };
   return frozenJson({ review, digest: digest(review) });

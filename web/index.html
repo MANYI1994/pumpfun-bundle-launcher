@@ -29,6 +29,7 @@
 </form>
 <p>Connect the creator to prepare the review. Sign with the mint account first, then reconnect the creator to sign and approve submission. The server simulates after both signatures arrive.</p>
 <button id="creation-sign" type="button" disabled>Sign with connected account</button>
+<p id="creation-signing-status" role="status"></p>
 <pre id="creation-result" aria-live="polite"></pre>
 </section>
 <section>
@@ -43,6 +44,7 @@
 <button id="bundle-transaction" value="transaction" class="secondary">Compile unsigned bundle</button>
 </form>
 <button id="bundle-sign" type="button" disabled>Sign next bundle transaction</button>
+<p id="bundle-signing-status" role="status"></p>
 <pre id="bundle-result" aria-live="polite"></pre>
 </section>
 <section>

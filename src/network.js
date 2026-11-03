@@ -71,14 +71,16 @@ export class Rpc {
     requireSafe(result && result.value && result.value.owner === owner && result.value.executable === false && Array.isArray(result.value.data) && result.value.data.length === 2 && result.value.data[1] === 'base64' && typeof result.value.data[0] === 'string' && Buffer.from(result.value.data[0], 'base64').toString('base64') === result.value.data[0], 'ACCOUNT_OWNER_OR_DATA_MISMATCH');
     return Buffer.from(result.value.data[0], 'base64');
   }
-  async getBlockhashContext() {
+  async getBlockhashContext({ reviewLifetimeMs = 30000 } = {}) {
+    requireSafe(Number.isSafeInteger(reviewLifetimeMs) && reviewLifetimeMs >= 1000 &&
+      reviewLifetimeMs <= 60000, 'INVALID_REVIEW_LIFETIME');
     // Recheck cluster for each signing context, not just once per client lifetime.
     await this.verifyCluster();
     const result = await this.read('getLatestBlockhash', [{ commitment: 'confirmed' }]);
     validAddress(result?.value?.blockhash);
     requireSafe(Number.isSafeInteger(result.value.lastValidBlockHeight) && result.value.lastValidBlockHeight > 0, 'INVALID_BLOCKHASH_LIFETIME');
     const now = Date.now();
-    const context = frozenJson({ cluster: 'devnet', genesis: DEVNET_GENESIS, blockhash: result.value.blockhash, lastValidBlockHeight: String(result.value.lastValidBlockHeight), observedAt: now, expiresAt: now + 30000 });
+    const context = frozenJson({ cluster: 'devnet', genesis: DEVNET_GENESIS, blockhash: result.value.blockhash, lastValidBlockHeight: String(result.value.lastValidBlockHeight), observedAt: now, expiresAt: now + reviewLifetimeMs });
     issuedContexts.set(context, { production: this.#production, rpc: this });
     return context;
   }
