@@ -50,7 +50,11 @@ export async function startWalletServer({ port = 8787, journalRoot, publicOrigin
     res.setHeader('cross-origin-resource-policy', 'same-origin');
     res.setHeader('x-frame-options', 'DENY');
     try {
-      requireSafe(req.headers.host === new URL(origin).host, 'INVALID_HOST');
+      const allowedHosts = [new URL(origin).host];
+      // Codespaces may rewrite Host while proxying HTTPS to this loopback listener.
+      // API authentication still requires the exact configured HTTPS Origin.
+      if (publicOrigin !== undefined) allowedHosts.push('127.0.0.1:8787', 'localhost:8787');
+      requireSafe(allowedHosts.includes(req.headers.host), 'INVALID_HOST');
       requireSafe(!req.headers['sec-fetch-site'] || ['same-origin', 'none'].includes(req.headers['sec-fetch-site']), 'CROSS_ORIGIN_REQUEST');
       if (req.method === 'GET' && assets.has(req.url)) {
         const asset = assets.get(req.url); res.writeHead(200, { 'content-type': asset.mime + '; charset=utf-8' }); res.end(asset.bytes); return;
@@ -255,7 +259,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const args = process.argv.slice(2);
   requireSafe(args.length === 0 || (args.length === 2 && args[0] === '--execution-state'), 'INVALID_ARGUMENTS');
   const journalRoot = args[1];
-  startWalletServer({ journalRoot, publicOrigin: process.env.LAUNCHER_PUBLIC_ORIGIN }).then(instance => {
+  const publicOrigin = process.env.LAUNCHER_PUBLIC_ORIGIN ?? (process.env.CODESPACES === 'true' && process.env.CODESPACE_NAME
+    ? `https://${process.env.CODESPACE_NAME}-8787.app.github.dev` : undefined);
+  startWalletServer({ journalRoot, publicOrigin }).then(instance => {
     console.log('Open this session URL in a desktop browser with a Wallet Standard extension:');
     console.log(instance.url);
     console.log(journalRoot ? 'Devnet funding execution mode: explicit simulation and submission approval required. Keep the session URL private.' : 'Devnet signature verification only. Nothing is broadcast. Keep the session URL private.');

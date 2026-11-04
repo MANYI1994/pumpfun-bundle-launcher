@@ -54,6 +54,9 @@ test('Codespaces origin stays exact and authenticated', async t => {
     req.on('error', reject); req.end('{}');
   });
   assert.equal(await request(new URL(origin).host, origin, token), 200);
+  assert.equal(await request('localhost:8787', origin, token), 200);
+  assert.equal(await request('127.0.0.1:8787', origin, token), 200);
+  assert.equal(await request('localhost:8787', 'http://localhost:8787', token), 400);
   assert.equal(await request('evil.example', origin, token), 400);
   assert.equal(await request(new URL(origin).host, 'https://evil.example', token), 400);
   assert.equal(await request(new URL(origin).host, origin, '0'.repeat(64)), 400);
