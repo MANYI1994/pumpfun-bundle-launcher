@@ -61,8 +61,9 @@ export async function startWalletServer({ port = 8787, journalRoot, publicOrigin
       requireSafe(!req.headers['sec-fetch-site'] || ['same-origin', 'none'].includes(req.headers['sec-fetch-site']), 'CROSS_ORIGIN_REQUEST');
       requireSafe(req.method === 'POST' && ['/api/launch-bundle-transaction', '/api/launch-bundle-verify', '/api/launch-bundle-simulate', '/api/create-review', '/api/create-simulate', '/api/review', '/api/collection-review', '/api/batch-funding-review', '/api/buy-signing-review', '/api/pumpswap-signing-review', '/api/sell-signing-review', '/api/cleanup-signing-review', '/api/verify', '/api/cancel', '/api/mode', '/api/simulate', '/api/submit', '/api/recover', '/api/operations', ...PANEL_ROUTES].includes(req.url), 'ROUTE_NOT_ALLOWED');
       const supplied = req.headers['x-launcher-session'];
-      requireSafe(req.headers.origin === origin && typeof supplied === 'string' && /^[a-f0-9]{64}$/.test(supplied)
-        && timingSafeEqual(Buffer.from(token), Buffer.from(supplied)), 'SESSION_OR_ORIGIN_REJECTED');
+      requireSafe(req.headers.origin === origin, 'BROWSER_ORIGIN_REJECTED');
+      requireSafe(typeof supplied === 'string' && /^[a-f0-9]{64}$/.test(supplied)
+        && timingSafeEqual(Buffer.from(token), Buffer.from(supplied)), 'SESSION_TOKEN_REJECTED');
       const body = await jsonBody(req);
       if (req.url === '/api/mode') { exactKeys(body, []); respond(200, { executionEnabled: Boolean(executor), cluster: 'devnet' }); return; }
       if (req.url === '/api/cancel') {

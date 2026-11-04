@@ -13,8 +13,8 @@ test('wallet server serves only local assets and protects all API calls with ori
   for (const p of ['/package.json', '/src/vault.js', '/api/verify', '/app.js?x=1']) assert.equal((await fetch(server.origin + p)).status, 400);
   const post = (body, headers = {}) => fetch(server.origin + '/api/cancel', { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
   assert.equal((await post({})).status, 400);
-  assert.equal((await post({}, { origin: 'https://evil.example', 'x-launcher-session': token })).status, 400);
-  assert.equal((await post({}, { origin: server.origin, 'x-launcher-session': '0'.repeat(64) })).status, 400);
+  assert.deepEqual(await (await post({}, { origin: 'https://evil.example', 'x-launcher-session': token })).json(), { error: 'BROWSER_ORIGIN_REJECTED' });
+  assert.deepEqual(await (await post({}, { origin: server.origin, 'x-launcher-session': '0'.repeat(64) })).json(), { error: 'SESSION_TOKEN_REJECTED' });
   const headers = { origin: server.origin, 'x-launcher-session': token };
   assert.deepEqual(await (await post({}, headers)).json(), { cancelled: true });
   const invalid = await fetch(server.origin + '/api/review', { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify({ privateKey: 'do-not-forward' }) });

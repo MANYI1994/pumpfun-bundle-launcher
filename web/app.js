@@ -25,7 +25,10 @@ async function api(route, body) {
 function render() {
   $('connect').disabled = busy || !validSession || !$('wallets').value;
   $('disconnect').disabled = !session.address;
-  $('prepare').disabled = busy || !validSession || !session.address;
+  const prepareBlocker = busy ? 'Waiting for the current wallet request.' : !validSession ? 'Session missing. Open the complete terminal URL.' : !session.address ? 'Connect your wallet first.' : '';
+  $('prepare').disabled = Boolean(prepareBlocker);
+  $('prepare').title = prepareBlocker;
+  $('prepare').textContent = prepareBlocker || 'Prepare review';
   $('simulate').disabled = busy || !execution || Boolean(execution.ticket) || !session.address;
   $('submit').disabled = busy || !execution?.ticket || !$('approve-send').checked || !session.address || Date.now() >= execution.ticket.expiresAt;
   $('recover').disabled = busy || !$('operations').value;
@@ -225,7 +228,7 @@ if (validSession) {
       $('intro').textContent = 'Devnet execution mode: connect, review, sign, simulate and explicitly submit. Use disposable test SOL only.';
       $('footnote').textContent = 'Desktop wallet extensions. Execution supports native SOL funding and collection, and reviewed Pump creation, buys and sells.';
     }
-  }).catch(() => status('Session unavailable. Reopen the complete local session URL.'));
+  }).catch(error => status(`Session unavailable: ${error.message}. Browser origin: ${location.origin}.`));
 }
 render();
 
