@@ -39,3 +39,22 @@ test('wallet server rejects DNS-rebinding hosts, cross-site requests and bad inp
     assert.equal(res.status, 400); assert.ok(['INVALID_JSON', 'INVALID_ADDRESS'].includes((await res.json()).error));
   }
 });
+
+test('Codespaces origin stays exact and authenticated', async t => {
+  for (const publicOrigin of ['http://demo-8787.app.github.dev', 'https://evil.example', 'https://demo-8787.app.github.dev/']) {
+    await assert.rejects(startWalletServer({ publicOrigin }), /INVALID_PUBLIC_ORIGIN/);
+  }
+  const origin = 'https://launcher-test-8787.app.github.dev';
+  const server = await startWalletServer({ publicOrigin: origin }); t.after(() => server.close());
+  const token = new URLSearchParams(new URL(server.url).hash.slice(1)).get('session');
+  const request = (host, suppliedOrigin, session) => new Promise((resolve, reject) => {
+    const req = http.request('http://127.0.0.1:8787/api/mode', { method: 'POST', headers: {
+      host, origin: suppliedOrigin, 'x-launcher-session': session, 'content-type': 'application/json'
+    } }, res => { res.resume(); res.on('end', () => resolve(res.statusCode)); });
+    req.on('error', reject); req.end('{}');
+  });
+  assert.equal(await request(new URL(origin).host, origin, token), 200);
+  assert.equal(await request('evil.example', origin, token), 400);
+  assert.equal(await request(new URL(origin).host, 'https://evil.example', token), 400);
+  assert.equal(await request(new URL(origin).host, origin, '0'.repeat(64)), 400);
+});

@@ -30,8 +30,9 @@ async function jsonBody(req) {
   catch { requireSafe(false, 'INVALID_JSON'); }
 }
 // Starts only when explicitly invoked. Bind address and API routes are fixed.
-export async function startWalletServer({ port = 8787, journalRoot } = {}) {
+export async function startWalletServer({ port = 8787, journalRoot, publicOrigin } = {}) {
   requireSafe(Number.isSafeInteger(port) && port >= 0 && port <= 65535, 'INVALID_PORT');
+  if (publicOrigin !== undefined) requireSafe(typeof publicOrigin === 'string' && /^https:\/\/[a-z0-9]+(?:-[a-z0-9]+)*-8787\.app\.github\.dev$/.test(publicOrigin) && port === 8787, 'INVALID_PUBLIC_ORIGIN');
   const assets = new Map(Object.entries(ASSETS).map(([url, [name, mime]]) => [url, { mime, bytes: readFileSync(new URL('../web/' + name, import.meta.url)) }]));
   const journal = journalRoot === undefined ? null : new ExecutionJournal(journalRoot);
   const executor = journal ? new NativeTransferExecutor(journal) : null;
@@ -245,7 +246,7 @@ export async function startWalletServer({ port = 8787, journalRoot } = {}) {
   server.requestTimeout = 15000; server.headersTimeout = 10000; server.timeout = 20000;
   server.maxHeadersCount = 32;
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); });
-  origin = `http://127.0.0.1:${server.address().port}`;
+  origin = publicOrigin ?? `http://127.0.0.1:${server.address().port}`;
   return Object.freeze({ origin, url: `${origin}/#session=${token}`, async close() {
     active = null; server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
   } });
@@ -254,7 +255,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const args = process.argv.slice(2);
   requireSafe(args.length === 0 || (args.length === 2 && args[0] === '--execution-state'), 'INVALID_ARGUMENTS');
   const journalRoot = args[1];
-  startWalletServer({ journalRoot }).then(instance => {
+  startWalletServer({ journalRoot, publicOrigin: process.env.LAUNCHER_PUBLIC_ORIGIN }).then(instance => {
     console.log('Open this session URL in a desktop browser with a Wallet Standard extension:');
     console.log(instance.url);
     console.log(journalRoot ? 'Devnet funding execution mode: explicit simulation and submission approval required. Keep the session URL private.' : 'Devnet signature verification only. Nothing is broadcast. Keep the session URL private.');

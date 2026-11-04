@@ -146,7 +146,7 @@ This step supports a single devnet funding transaction and one signer. It delibe
 rejects wallets that change the reviewed message, including meta-transaction wallets.
 There is no mobile deep-link flow, hardware acceptance result, collection UI, or
 creation/buy/sell signing yet. Run this server on the same computer as the browser;
-public hosting and Codespaces/VPS forwarding are not supported by its strict origin
+public hosting and arbitrary VPS forwarding are not supported by its strict origin
 checks. Do not bind it publicly or weaken these checks to expose it.
 
 Automated tests simulate the Wallet Standard provider and RPC, using disposable
@@ -489,3 +489,37 @@ so testnet smoke testing requires a separate external signer. No live bundle
 was submitted during development.
 
 [Jito Block Engine API](https://github.com/jito-labs/jito-docs/blob/main/docs/source/lowlatencytxnsend.md)
+
+
+## Codespaces testing
+
+Create a Codespace on branch `security/devnet-executor-2026-11-03`.
+Keep forwarded port 8787 **Private**. Open the dashboard in a separate browser tab,
+not the embedded preview. Use disposable wallets on Solana devnet; never paste private keys.
+
+```bash
+npm ci --ignore-scripts
+npm test
+npm run check
+export LAUNCHER_PUBLIC_ORIGIN="https://${CODESPACE_NAME}-8787.app.github.dev"
+npm run wallet:connect
+```
+
+Open the complete session URL printed by the server (including its fragment).
+This starts verification-only mode: no transactions are broadcast. First check wallet
+connection, public wallet imports, balance reads, metadata, and review rejection paths.
+
+When ready to test explicit devnet submission, stop the server and run:
+
+```bash
+mkdir -p "$HOME/launcher-private"
+chmod 700 "$HOME/launcher-private"
+npm run wallet:execute -- "$HOME/launcher-private"
+```
+
+Keep the same exported origin. Start with a tiny devnet funding transfer and recovery,
+then collection, token creation, buys, sells, and cleanup. Review each transaction in
+your wallet before approving. Mainnet execution remains disabled. Jito testnet smoke
+commands are separate from the devnet dashboard; joint launch simulation additionally
+requires a local Jito-Solana simulator. Codespace deletion also deletes local recovery
+state unless separately preserved; do not delete it while operations are unresolved.
