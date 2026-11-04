@@ -17,10 +17,10 @@ async function boundedWalletCall(action, timeoutMs) {
     })]);
   } finally { clearTimeout(timer); }
 }
-function messageOfWire(wire) {
-  // Current review policy is a legacy transaction with exactly one signer.
-  check(wire.length > 65 && wire[0] === 1, 'INVALID_WIRE');
-  return wire.subarray(65);
+function messageOfWire(wire, signerCount) {
+  const offset = 1 + 64 * signerCount;
+  check(wire.length > offset && wire[0] === signerCount, 'INVALID_WIRE');
+  return wire.subarray(offset);
 }
 function sameBytes(a, b) { return a.length === b.length && a.every((v, i) => v === b[i]); }
 function accountSupported(account) {
@@ -91,19 +91,28 @@ export class WalletSession {
     check(wallet && account && supported(wallet) && accountSupported(account), 'WALLET_NOT_CONNECTED');
     check(wallet.accounts?.includes(account) && account.address === data.expectedAddress, 'CONNECTED_WALLET_MISMATCH');
     check(data.chain === CHAIN && details?.cluster === 'devnet' && details.productionVerified === true
-      && details.verificationAllowed === true && ['fund', 'collect'].includes(details.plan?.action)
+      && details.verificationAllowed === true && ['fund', 'collect', 'buy', 'sell', 'cleanup', 'create', 'swap', 'launch-bundle'].includes(details.plan?.action)
       && details.broadcast === false, 'UNVERIFIED_WALLET_REQUEST');
     check(typeof confirmation === 'string' && /^[a-f0-9]{64}$/.test(confirmation) && confirmation === data.review.digest, 'REVIEW_NOT_APPROVED');
     check(Date.now() < details.expiresAt && details.expiresAt <= Date.now() + 60000, 'REVIEW_EXPIRED');
     check(Array.isArray(data.unsignedTransactions) && data.unsignedTransactions.length > 0
       && data.unsignedTransactions.length <= 5 && data.unsignedTransactions.length === details.transactions?.length, 'INVALID_BATCH');
+    const bundle = details.plan.action === 'launch-bundle';
+    const signerCount = bundle ? details.transactions[0].requiredSigners?.length : details.plan.action === 'create' ? 2 : 1;
+    check(signerCount === 1 || signerCount === 2, 'INVALID_SIGNER_COUNT');
+    check(signerCount === 1 || data.unsignedTransactions.length === 1, 'INVALID_BATCH');
+    const signerOffsets = [];
     const requests = data.unsignedTransactions.map((wire, i) => {
       const tx = details.transactions[i];
-      check(tx.requiredSigners?.length === 1 && tx.requiredSigners[0] === account.address, 'CONNECTED_WALLET_MISMATCH');
-      const transaction = fromBase64(wire), message = messageOfWire(transaction);
-      check(toBase64(message) === tx.messageBase64 && transaction.subarray(1, 65).every(v => v === 0), 'MESSAGE_DIFFERS_FROM_REVIEW');
-      check(message[0] === 1 && message[1] === 0 && message[3] > 0 && message[3] < 128
-        && sameBytes(message.subarray(4, 36), account.publicKey), 'CONNECTED_WALLET_MISMATCH');
+      const signerIndex = tx.requiredSigners?.indexOf(account.address) ?? -1;
+      check(tx.requiredSigners?.length === signerCount && signerIndex >= 0, 'CONNECTED_WALLET_MISMATCH');
+      const transaction = fromBase64(wire), message = messageOfWire(transaction, signerCount);
+      check(toBase64(message) === tx.messageBase64 &&
+        transaction.subarray(1, 1 + 64 * signerCount).every(v => v === 0), 'MESSAGE_DIFFERS_FROM_REVIEW');
+      const keyOffset = 4 + signerIndex * 32;
+      check(message[0] === signerCount && message[1] === 0 && message[3] >= signerCount && message[3] < 128 &&
+        sameBytes(message.subarray(keyOffset, keyOffset + 32), account.publicKey), 'CONNECTED_WALLET_MISMATCH');
+      signerOffsets.push(1 + signerIndex * 64);
       return { transaction, account, chain: CHAIN };
     });
     this.#busy = true;
@@ -120,10 +129,10 @@ export class WalletSession {
       const signed = [];
       for (let i = 0; i < wires.length; i++) {
         const wire = wires[i];
-        const message = messageOfWire(wire);
+        const message = messageOfWire(wire, signerCount);
         check(toBase64(message) === details.transactions[i].messageBase64, 'MESSAGE_DIFFERS_FROM_REVIEW');
         const key = await crypto.subtle.importKey('raw', account.publicKey, 'Ed25519', false, ['verify']);
-        check(await crypto.subtle.verify('Ed25519', key, wire.subarray(1, 65), message), 'INVALID_WALLET_SIGNATURE');
+        check(await crypto.subtle.verify('Ed25519', key, wire.subarray(signerOffsets[i], signerOffsets[i] + 64), message), 'INVALID_WALLET_SIGNATURE');
         check(this.#revision === revision && Date.now() < details.expiresAt, 'WALLET_CHANGED_OR_EXPIRED');
         signed.push(toBase64(wire));
       }

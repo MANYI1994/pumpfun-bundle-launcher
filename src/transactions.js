@@ -1,8 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import {
   AccountRole, createTransactionMessage, setTransactionMessageFeePayer,
   setTransactionMessageLifetimeUsingBlockhash, appendTransactionMessageInstructions,
   compileTransaction, assertIsFullySignedTransaction,
-  getBase64EncodedWireTransaction, getTransactionDecoder, getAddressEncoder, getProgramDerivedAddress,
+  getBase64EncodedWireTransaction, getTransactionDecoder, getSignatureFromTransaction, getAddressEncoder, getProgramDerivedAddress,
 } from '@solana/kit';
 import { raw, requireSafe, validAddress, digest, frozenJson, equalDigest } from './security.js';
 import { validateEnvelope, LIMITS, enforceFundingBudget, enforceCollectionBudgets } from './plans.js';
@@ -23,7 +24,7 @@ export function transferInstruction(from, to, lamports) {
   const tag = Buffer.alloc(4); tag.writeUInt32LE(2);
   return { programAddress: SYSTEM, accounts: [meta(from, true, true), meta(to, true)], data: Buffer.concat([tag, u64(raw(String(lamports)))]) };
 }
-function message(payer, lifetime, instructions) {
+export function message(payer, lifetime, instructions) {
   validAddress(payer); validAddress(lifetime.blockhash);
   requireSafe(typeof lifetime.lastValidBlockHeight === 'bigint' && lifetime.lastValidBlockHeight > 0n, 'INVALID_BLOCKHASH_LIFETIME');
   let m = createTransactionMessage({ version: 'legacy' });
@@ -31,7 +32,7 @@ function message(payer, lifetime, instructions) {
   m = setTransactionMessageLifetimeUsingBlockhash(lifetime, m);
   return appendTransactionMessageInstructions(instructions, m);
 }
-function bounded(tx) {
+export function bounded(tx) {
   const wire = getBase64EncodedWireTransaction(tx);
   requireSafe(Buffer.from(wire, 'base64').length <= 1232, 'TRANSACTION_TOO_LARGE');
   return tx;
@@ -102,12 +103,17 @@ export function transactionFingerprint(transaction) { return digest({ message: B
 // Only reviews issued by this module can be signed. Serialized hashes alone are
 // not capabilities: raw caller-supplied transaction objects are never accepted.
 const pendingReviews = new WeakMap();
+const verifiedExecutions = new WeakMap();
+const executionPermits = new WeakMap();
 function issueReview(envelope, transactions, lifetime, context = null, budget = null) {
   const plan = validateEnvelope(envelope, envelope.digest);
+  return issueValidatedReview(plan, envelope.digest, transactions, lifetime, context, budget);
+}
+function issueValidatedReview(plan, planDigest, transactions, lifetime, context, budget) {
   const details = {
-    version: 1, cluster: 'devnet', plan, planDigest: envelope.digest,
+    version: 1, cluster: 'devnet', plan, planDigest,
     expiresAt: context ? Math.min(plan.expiresAt, context.expiresAt) : plan.expiresAt,
-    signingAllowed: false, verificationAllowed: ['fund', 'collect'].includes(plan.action), productionVerified: Boolean(context), budget,
+    signingAllowed: false, verificationAllowed: ['fund', 'collect'].includes(plan.action) || Boolean(context && ['buy', 'sell', 'cleanup', 'create', 'swap'].includes(plan.action)), productionVerified: Boolean(context), budget,
     blockhash: lifetime.blockhash, lastValidBlockHeight: String(lifetime.lastValidBlockHeight),
     transactions: transactions.map(tx => ({ messageBase64: Buffer.from(tx.messageBytes).toString('base64'), requiredSigners: Object.keys(tx.signatures).sort(), fingerprint: transactionFingerprint(tx) })),
     broadcast: false,
@@ -125,6 +131,89 @@ export async function prepareFundingReview(envelope, confirmation, context) {
   assertDevnetContext(context);
   return issueReview(approved, [tx], snapshot, context, budget);
 }
+export async function prepareBuySigningReview(input, maxDebitLamports) {
+  const maxDebit = raw(maxDebitLamports);
+  requireSafe(maxDebit <= LIMITS.maxSpendLamports, 'TOTAL_DEBIT_LIMIT_EXCEEDED');
+  const { compileBuyCandidate } = await import('./buy-transaction.js');
+  const { candidate, tx, context } = await compileBuyCandidate(input);
+  const lifetime = assertDevnetContext(context);
+  const evidence = await fundingBudgetEvidence(context, candidate.owner, Buffer.from(tx.messageBytes).toString('base64'));
+  requireSafe(BigInt(candidate.tradeBudgetLamports) + BigInt(evidence.feeLamports) <= maxDebit, 'TRADE_AND_FEE_EXCEED_CAP');
+  requireSafe(BigInt(evidence.balanceLamports) >= maxDebit + LIMITS.feeReserveLamports, 'INSUFFICIENT_BALANCE_OR_FEE_RESERVE');
+  requireSafe(Date.now() < candidate.expiresAt, 'BUY_REVIEW_EXPIRED');
+  const plan = frozenJson({ ...candidate, id: randomUUID(), payerAddress: candidate.owner, maxDebitLamports });
+  return issueValidatedReview(plan, digest(plan), [tx], lifetime, context, evidence);
+}
+export async function prepareSellSigningReview(input) {
+  const { compileSellCandidate } = await import('./sell-transaction.js');
+  const { candidate, tx, context } = await compileSellCandidate(input);
+  const lifetime = assertDevnetContext(context);
+  const evidence = await fundingBudgetEvidence(context, candidate.owner, Buffer.from(tx.messageBytes).toString('base64'));
+  requireSafe(BigInt(evidence.balanceLamports) >= BigInt(evidence.feeLamports) + LIMITS.feeReserveLamports,
+    'INSUFFICIENT_BALANCE_OR_FEE_RESERVE');
+  requireSafe(Date.now() < candidate.expiresAt, 'SELL_REVIEW_EXPIRED');
+  const plan = frozenJson({ ...candidate, id: randomUUID(), payerAddress: candidate.owner });
+  return issueValidatedReview(plan, digest(plan), [tx], lifetime, context, evidence);
+}
+
+export async function prepareCleanupSigningReview(input) {
+  const { compileCleanup } = await import('./cleanup.js');
+  const { candidate, tx, context } = await compileCleanup(input);
+  const lifetime = assertDevnetContext(context);
+  const evidence = await fundingBudgetEvidence(context, candidate.owner, Buffer.from(tx.messageBytes).toString('base64'));
+  const fee = BigInt(evidence.feeLamports);
+  requireSafe(BigInt(evidence.balanceLamports) >= fee + LIMITS.feeReserveLamports,
+    'INSUFFICIENT_BALANCE_OR_FEE_RESERVE');
+  const minimum = BigInt(candidate.recoveredLamports) - 2n * fee;
+  requireSafe(minimum > 0n, 'CLEANUP_RECOVERY_TOO_LOW');
+  const plan = frozenJson({ ...candidate, id: randomUUID(), minimumOutputLamports: String(minimum) });
+  return issueValidatedReview(plan, digest(plan), [tx], lifetime, context, evidence);
+}
+
+export async function creationBudgetEvidence(envelope, context, maxDebitLamports) {
+  const lifetime = assertDevnetContext(context);
+  const cap = raw(maxDebitLamports);
+  requireSafe(cap <= LIMITS.maxSpendLamports, 'TOTAL_DEBIT_LIMIT_EXCEEDED');
+  const creation = envelope.review;
+  requireSafe(creation.blockhash === lifetime.blockhash &&
+    creation.lastValidBlockHeight === String(lifetime.lastValidBlockHeight), 'CREATION_CONTEXT_MISMATCH');
+  const tx = getTransactionDecoder().decode(Buffer.from(creation.unsignedWireBase64, 'base64'));
+  const evidence = await fundingBudgetEvidence(context, creation.creatorAddress, Buffer.from(tx.messageBytes).toString('base64'));
+  requireSafe(BigInt(evidence.feeLamports) <= cap, 'CREATION_FEE_EXCEEDS_CAP');
+  requireSafe(BigInt(evidence.balanceLamports) >= cap + LIMITS.feeReserveLamports,
+    'INSUFFICIENT_BALANCE_OR_FEE_RESERVE');
+  return { lifetime, tx, cap, evidence };
+}
+
+export async function prepareCreationExecution(envelope, context, maxDebitLamports, signedWires, reviewedFee) {
+  const { verifyCreationSignatures } = await import('./create-verification.js');
+  const signed = await verifyCreationSignatures(envelope, envelope.digest, signedWires);
+  const { lifetime, tx, cap, evidence } = await creationBudgetEvidence(envelope, context, maxDebitLamports);
+  requireSafe(evidence.feeLamports === reviewedFee, 'FEE_CHANGED_REVIEW_REQUIRED');
+  const creation = envelope.review;
+  const plan = frozenJson({ action: 'create', id: randomUUID(), payerAddress: creation.creatorAddress,
+    mintAddress: creation.mintAddress, bondingCurve: creation.bondingCurve, metadataUri: creation.metadataUri,
+    maxDebitLamports: String(cap), tradeBudgetLamports: '0', expiresAt: context.expiresAt });
+  const review = issueValidatedReview(plan, digest(plan), [tx], lifetime, context, evidence);
+  const result = await verifySignedWireBatch(review, review.digest, [signed.signedWireBase64]);
+  return { review, result };
+}
+
+export async function preparePumpSwapSigningReview(input, maxDebitLamports) {
+  const cap = raw(maxDebitLamports);
+  requireSafe(cap <= LIMITS.maxSpendLamports, 'TOTAL_DEBIT_LIMIT_EXCEEDED');
+  const { compilePumpSwapCandidate } = await import('./pumpswap-transaction.js');
+  const { candidate, tx, context } = await compilePumpSwapCandidate(input);
+  const lifetime = assertDevnetContext(context);
+  const evidence = await fundingBudgetEvidence(context, candidate.owner, Buffer.from(tx.messageBytes).toString('base64'));
+  requireSafe(BigInt(evidence.feeLamports) <= cap &&
+    BigInt(evidence.balanceLamports) >= cap + LIMITS.feeReserveLamports, 'INSUFFICIENT_BALANCE_OR_FEE_RESERVE');
+  requireSafe(Date.now() < candidate.expiresAt, 'SWAP_REVIEW_EXPIRED');
+  const plan = frozenJson({ ...candidate, action: 'swap', id: randomUUID(),
+    payerAddress: candidate.owner, maxDebitLamports: String(cap), tradeBudgetLamports: '0' });
+  return issueValidatedReview(plan, digest(plan), [tx], lifetime, context, evidence);
+}
+
 export function prepareOfflineFundingReview(envelope, confirmation, lifetime) {
   const snapshot = Object.freeze({ blockhash: lifetime.blockhash, lastValidBlockHeight: lifetime.lastValidBlockHeight });
   return issueReview(envelope, [compileFunding(envelope, confirmation, snapshot)], snapshot);
@@ -139,7 +228,7 @@ export async function prepareCurveSellReview(envelope, confirmation, lifetime, s
 export async function verifyReviewedBatch(review, confirmation, signedTransactions) {
   const issued = pendingReviews.get(review);
   requireSafe(issued && equalDigest(confirmation, review.digest) && equalDigest(review.digest, digest(review.details)), 'REVIEW_NOT_ISSUED_OR_UNAPPROVED');
-  requireSafe(review.details.verificationAllowed && ['fund', 'collect'].includes(review.details.plan.action), 'UNVERIFIED_TRADE_SIGNING_DISABLED');
+  requireSafe(review.details.verificationAllowed && ['fund', 'collect', 'buy', 'sell', 'cleanup', 'create', 'swap'].includes(review.details.plan.action), 'UNVERIFIED_TRADE_SIGNING_DISABLED');
   const { transactions, context } = issued;
   if (context) assertDevnetContext(context);
   requireSafe(Date.now() < review.details.expiresAt, 'REVIEW_EXPIRED');
@@ -168,11 +257,24 @@ export async function verifyReviewedBatch(review, confirmation, signedTransactio
     }
     assertIsFullySignedTransaction(tx);
     bounded(tx);
-    output.push({ wireBase64: getBase64EncodedWireTransaction(tx), fingerprint: transactionFingerprint(tx) });
+    output.push({ wireBase64: getBase64EncodedWireTransaction(tx), fingerprint: transactionFingerprint(tx), signature: getSignatureFromTransaction(tx) });
   }
   if (context) assertDevnetContext(context);
   requireSafe(Date.now() < review.details.expiresAt, 'REVIEW_EXPIRED');
-  return frozenJson({ transactions: output, productionVerified: Boolean(context), broadcast: false });
+  const execution = frozenJson({ version: 1, cluster: 'devnet', planDigest: review.details.planDigest,
+    expiresAt: review.details.expiresAt, lastValidBlockHeight: review.details.lastValidBlockHeight, transactions: output });
+  const result = frozenJson({ transactions: output, productionVerified: Boolean(context), broadcast: false, executionDigest: digest(execution) });
+  const { plan, budget } = review.details;
+  if (plan.action === 'collect' && plan.wallets.length === 1 && context) {
+    verifiedExecutions.set(result, {
+      context, execution,
+      plan: frozenJson({ ...plan, payerAddress: plan.wallets[0].address }),
+      budget: budget[0],
+    });
+  } else {
+    verifiedExecutions.set(result, { context, execution, plan, budget });
+  }
+  return result;
 }
 
 // Export only server-issued production reviews, never arbitrary caller messages.
@@ -200,4 +302,29 @@ export async function verifySignedWireBatch(review, confirmation, wires) {
     return tx;
   });
   return verifyReviewedBatch(review, confirmation, transactions);
+}
+
+// One-use handoff from verification to the isolated native-transfer executor.
+export function claimVerifiedExecution(batch, confirmation) {
+  const record = verifiedExecutions.get(batch);
+  requireSafe(record && batch.productionVerified && equalDigest(confirmation, batch.executionDigest), 'EXECUTION_NOT_VERIFIED_OR_APPROVED');
+  assertDevnetContext(record.context);
+  requireSafe(['fund', 'buy', 'sell', 'collect', 'cleanup', 'create', 'swap'].includes(record.plan.action) && record.execution.transactions.length === 1, 'EXECUTION_ROUTE_NOT_ENABLED');
+  verifiedExecutions.delete(batch);
+  const permit = Object.freeze({ executionDigest: batch.executionDigest });
+  executionPermits.set(permit, { ...record, used: false });
+  return permit;
+}
+export function inspectExecutionPermit(permit) {
+  const record = executionPermits.get(permit);
+  requireSafe(record && !record.used, 'EXECUTION_PERMIT_INVALID_OR_CONSUMED');
+  assertDevnetContext(record.context);
+  requireSafe(Date.now() < record.execution.expiresAt, 'EXECUTION_APPROVAL_EXPIRED');
+  return frozenJson({ executionDigest: permit.executionDigest, ...record.execution,
+    plan: record.plan, budget: record.budget, blockhash: record.context.blockhash });
+}
+export function consumeExecutionPermit(permit) {
+  const descriptor = inspectExecutionPermit(permit);
+  executionPermits.get(permit).used = true;
+  return descriptor;
 }

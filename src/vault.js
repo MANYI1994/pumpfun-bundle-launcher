@@ -1,4 +1,4 @@
-import { constants, openSync, closeSync, lstatSync, mkdirSync, realpathSync, renameSync, unlinkSync, writeFileSync, readdirSync, fsyncSync } from 'node:fs';
+import { constants, openSync, closeSync, lstatSync, renameSync, unlinkSync, writeFileSync, readdirSync, fsyncSync } from 'node:fs';
 import path from 'node:path';
 import { randomBytes, scryptSync, createCipheriv, createDecipheriv } from 'node:crypto';
 import { createKeyPairSignerFromPrivateKeyBytes } from '@solana/kit';
@@ -7,29 +7,8 @@ import { readRegularFile } from './files.js';
 
 const KDF = Object.freeze({ name: 'scrypt', N: 32768, r: 8, p: 1 });
 const ID = /^[a-z][a-z0-9-]{0,47}$/;
-function trustedDirectory(stat) {
-  const owned = stat.uid === 0 || stat.uid === process.getuid();
-  const writable = (stat.mode & 0o022) !== 0;
-  // Root-owned sticky directories such as /tmp are safe ancestors, not vault roots.
-  const stickyRoot = stat.uid === 0 && (stat.mode & 0o1000) !== 0;
-  requireSafe(stat.isDirectory() && !stat.isSymbolicLink() && owned && (!writable || stickyRoot), 'UNSAFE_VAULT_ANCESTOR');
-}
-function privateStat(stat) {
-  requireSafe(stat.uid === process.getuid() && (stat.mode & 0o077) === 0, 'UNSAFE_FILE_PERMISSIONS');
-}
-export function prepareRoot(root) {
-  requireSafe(typeof root === 'string' && path.isAbsolute(root), 'ABSOLUTE_VAULT_PATH_REQUIRED');
-  requireSafe(path.normalize(root) === root, 'NORMALIZED_VAULT_PATH_REQUIRED');
-  // Resolve existing ancestors and reject symlinks before creating the root.
-  let part = path.parse(root).root;
-  for (const component of root.slice(part.length).split(path.sep).filter(Boolean)) {
-    part = path.join(part, component);
-    try { const stat = lstatSync(part); requireSafe(!stat.isSymbolicLink(), 'SYMLINK_NOT_ALLOWED'); trustedDirectory(stat); }
-    catch (e) { if (e.code !== 'ENOENT') throw e; mkdirSync(part, { mode: 0o700 }); }
-  }
-  const stat = lstatSync(root); requireSafe(stat.isDirectory(), 'INVALID_VAULT_DIRECTORY'); privateStat(stat);
-  return realpathSync(root);
-}
+import { prepareRoot, trustedDirectory } from './private-directory.js';
+export { prepareRoot } from './private-directory.js';
 function readPrivate(file, limit = 65536) {
   return readRegularFile(file, { maxBytes: limit, privateFile: true });
 }

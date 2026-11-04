@@ -1,0 +1,7 @@
+{
+  "name": "Launcher devnet testing",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:24-bookworm",
+  "postCreateCommand": "npm ci --ignore-scripts",
+  "forwardPorts": [8787],
+  "portsAttributes": {"8787": {"label": "Private launcher", "onAutoForward": "silent", "visibility": "private"}}
+}

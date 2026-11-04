@@ -18,7 +18,7 @@ test('loading every application module does not scan configuration files or open
   patch(globalThis, 'fetch', forbidden('fetch'));
   for (const [object, names] of [[http, ['request', 'get']], [https, ['request', 'get']], [net, ['connect', 'createConnection']], [tls, ['connect']]]) for (const name of names) patch(object, name, forbidden(name));
   try {
-    for (const module of ['security', 'vault', 'network', 'plans', 'transactions', 'settlement', 'terminal', 'cli', 'wallet-server']) await import('../src/' + module + '.js');
+    for (const module of ['security', 'vault', 'network', 'plans', 'transactions', 'settlement', 'terminal', 'cli', 'wallet-server', 'private-directory', 'journal', 'execution-transport', 'executor']) await import('../src/' + module + '.js');
     assert.deepEqual(touched, []);
   } finally { replacements.reverse().forEach(restore => restore()); }
 });

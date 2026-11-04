@@ -1,13 +1,18 @@
+import { attachWatchlist } from "./watchlist.js";
+import { attachLauncherPanel } from "./launcher-panel.js";
 import { discoverWallets, WalletSession } from './wallet.js';
 const $ = id => document.getElementById(id);
 const token = new URLSearchParams(location.hash.slice(1)).get('session');
 history.replaceState(null, '', '/');
-let wallets = [], payload = null, busy = false, generation = 0;
+let wallets = [], payload = null, execution = null, executionEnabled = false, busy = false, generation = 0;
 const validSession = /^[a-f0-9]{64}$/.test(token ?? '');
 const status = message => { $('status').textContent = message; };
 function reset() { generation++; payload = null; $('approve').checked = false; $('review-section').hidden = true; render(); }
+let renderWalletSlots;
 const session = new WalletSession(address => {
+  execution = null; $('execution-section').hidden = true;
   reset(); $('account').textContent = address ? `Connected: ${address}` : 'No wallet connected.';
+  renderWalletSlots?.();
   if (validSession) api('/api/cancel', {}).catch(() => {});
 });
 async function api(route, body) {
@@ -20,7 +25,14 @@ async function api(route, body) {
 function render() {
   $('connect').disabled = busy || !validSession || !$('wallets').value;
   $('disconnect').disabled = !session.address;
-  $('prepare').disabled = busy || !validSession || !session.address;
+  const prepareBlocker = busy ? 'Waiting for the current wallet request.' : !validSession ? 'Session missing. Open the complete terminal URL.' : !session.address ? 'Connect your wallet first.' : '';
+  $('prepare').disabled = Boolean(prepareBlocker);
+  $('prepare').title = prepareBlocker;
+  $('prepare').textContent = prepareBlocker || 'Prepare review';
+  $('simulate').disabled = busy || !execution || Boolean(execution.ticket) || !session.address;
+  $('submit').disabled = busy || !execution?.ticket || !$('approve-send').checked || !session.address || Date.now() >= execution.ticket.expiresAt;
+  $('recover').disabled = busy || !$('operations').value;
+  $('refresh-operations').disabled = busy;
   $('sign').disabled = busy || !payload || !$('approve').checked || !session.address || Date.now() >= payload.review.details.expiresAt;
 }
 discoverWallets(window, items => {
@@ -32,7 +44,9 @@ discoverWallets(window, items => {
 });
 $('wallets').addEventListener('change', render);
 $('approve').addEventListener('change', render);
-for (const id of ['destination', 'amount']) $(id).addEventListener('input', reset);
+$('approve-send').addEventListener('change', render);
+$('operations').addEventListener('change', render);
+for (const id of ['destination', 'amount', 'transfer-kind', 'batch-recipients']) $(id).addEventListener('input', () => { execution = null; $('execution-section').hidden = true; reset(); });
 $('connect').addEventListener('click', async () => {
   busy = true; render(); status('Approve the wallet connection.');
   try { await session.connect(wallets[Number($('wallets').value) - 1]); status('Connected. Enter the recipient and test amount.'); }
@@ -40,13 +54,49 @@ $('connect').addEventListener('click', async () => {
   finally { busy = false; render(); }
 });
 $('disconnect').addEventListener('click', async () => { await session.disconnect(); status('Disconnected. Previous reviews are invalid.'); });
+$('transfer-kind').addEventListener('change', () => {
+  const batch = $('transfer-kind').value === 'batch';
+  $('single-transfer-fields').hidden = batch;
+  $('batch-transfer-fields').hidden = !batch;
+  $('destination').disabled = batch;
+  $('amount').disabled = batch;
+  $('batch-recipients').disabled = !batch;
+});
+function transferRequest() {
+  const payerAddress = session.address;
+  const kind = $('transfer-kind').value;
+  if (kind === 'batch') {
+    const rows = $('batch-recipients').value.trim().split(/\r?\n/);
+    if (rows.length > 5) throw new Error('ENTER_UP_TO_FIVE_RECIPIENTS');
+    const wallets = rows.map((row, index) => {
+      const [address, lamports, extra] = row.trim().split(/\s+/);
+      if (!address || !lamports || extra) throw new Error('ENTER_ADDRESS_AND_LAMPORTS_PER_LINE');
+      return { id: `recipient-${index + 1}`, address, lamports };
+    });
+    return ['/api/batch-funding-review', { payerAddress, wallets }];
+  }
+  const route = kind === 'collect' ? '/api/collection-review' : '/api/review';
+  return [route, { payerAddress, destinationAddress: $('destination').value, lamports: $('amount').value }];
+}
+function transferRecipients(plan) {
+  return plan.wallets.map(wallet => [plan.destinationAddress ?? wallet.address, wallet.lamports]);
+}
 $('form').addEventListener('submit', async event => {
   event.preventDefault(); reset(); const current = generation; busy = true; render(); status('Checking devnet, balance and exact transaction fee…');
   try {
-    const result = await api('/api/review', { payerAddress: session.address, destinationAddress: $('destination').value, lamports: $('amount').value });
+    if (executionEnabled) await api('/api/cancel', {});
+    execution = null; $('execution-section').hidden = true;
+    const [route, request] = transferRequest();
+    const result = await api(route, request);
     if (current !== generation || result.expectedAddress !== session.address) throw new Error('WALLET_CHANGED');
     payload = result; const d = result.review.details, p = d.plan;
-    const entries = [['Network', 'Solana devnet'], ['From', p.payerAddress], ['To', p.wallets[0].address], ['Lamports', p.wallets[0].lamports], ['Fee', d.budget.feeLamports], ['Remaining', d.budget.remainingLamports], ['Review hash', result.review.digest]];
+    const collecting = p.action === 'collect';
+    const budget = collecting ? d.budget[0] : d.budget;
+    const entries = [['Network', 'Solana devnet'], ['Purpose', collecting ? 'Collect SOL' : 'Fund wallets'],
+      ['From', result.expectedAddress],
+      ...transferRecipients(p).map(([address, amount], index) => [`Recipient ${index + 1}`, `${address} · ${amount} lamports`]),
+      ['Total lamports', p.totalSpendLamports], ['Fee', budget.feeLamports],
+      ['Remaining', budget.remainingLamports], ['Review hash', result.review.digest]];
     $('summary').replaceChildren();
     for (const [label, value] of entries) { const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = label; dd.textContent = value; $('summary').append(dt, dd); }
     $('review-section').hidden = false; status('Review the transfer, then approve signing. Nothing will be broadcast.');
@@ -62,12 +112,126 @@ $('sign').addEventListener('click', async () => {
     const result = await api('/api/verify', { reviewDigest: request.review.digest, signedTransactions: wires });
     if (current !== generation || !result.verified || result.broadcast !== false) throw new Error('VERIFICATION_FAILED');
     status('Signature verified: the expected wallet signed the exact reviewed transaction. Nothing was broadcast.');
+    showExecution(result, request.review.details.plan);
   } catch (e) { status(`Signing did not complete: ${e.message}. Prepare a fresh review to try again.`); }
   finally { reset(); busy = false; render(); }
 });
+function showExecution(result, plan) {
+  const payer = plan.action === 'collect' ? plan.wallets[0].address : plan.payerAddress;
+  if (!result.executionEnabled || session.address !== payer) return;
+  execution = { digest: result.executionDigest, id: result.operationId, ticket: null };
+  $('approve-send').checked = false;
+  const summary = plan.action === 'swap'
+    ? `PumpSwap ${plan.side}: ${plan.mint}\nWallet: ${payer}\nPool: ${plan.pool}\nSource: ${plan.sourceTokenAccount}\nDestination: ${plan.destinationTokenAccount}\nInput: ${plan.inputAmountRaw} ${plan.inputUnit}\nMinimum output: ${plan.minimumOutputRaw} ${plan.outputUnit}\nNative SOL debit cap: ${plan.maxDebitLamports} lamports`
+    : plan.action === 'buy'
+    ? `Buy mint: ${plan.mint}\nWallet: ${plan.payerAddress}\nDestination: ${plan.destinationTokenAccount}\nTrade budget: ${plan.tradeBudgetLamports} lamports\nTotal debit cap checked in simulation: ${plan.maxDebitLamports} lamports\nMinimum token output: ${plan.minimumTokenAmountRaw} raw units`
+    : plan.action === 'sell'
+      ? `Sell mint: ${plan.mint}\nWallet: ${plan.payerAddress}\nSource: ${plan.sourceTokenAccount}\nToken amount: ${plan.amountRaw} raw units\nMinimum SOL proceeds: ${plan.minimumOutputLamports} lamports\nProceeds wallet: ${plan.proceedsAddress}`
+      : plan.action === 'cleanup'
+        ? `Cleanup: ${plan.cleanupKind}\nAccount to close: ${plan.tokenAccount}\nExpected recovery: ${plan.recoveredLamports} lamports\nProceeds wallet: ${plan.proceedsAddress}`
+        : plan.action === 'create'
+          ? `Create mint: ${plan.mintAddress}\nCreator: ${payer}\nBonding curve: ${plan.bondingCurve}\nMetadata URL: ${plan.metadataUri}\nSimulation debit cap: ${plan.maxDebitLamports} lamports`
+          : `Purpose: ${plan.action === 'collect' ? 'Collect SOL' : 'Fund wallet'}\nFrom: ${payer}\nRecipients: ${transferRecipients(plan).map(([address, amount]) => `\n${address} · ${amount} lamports`).join('')}\nTotal: ${plan.totalSpendLamports} lamports`;
+  $('execution-summary').textContent = `${summary}\nOperation: ${execution.id}`;
+  $('execution-section').hidden = false;
+  render();
+}
 setInterval(() => {
   if (payload) $('expiry').textContent = `Review expires in ${Math.max(0, Math.ceil((payload.review.details.expiresAt - Date.now()) / 1000))} seconds. Prepare again if it expires.`;
   render();
 }, 500);
-if (validSession) status('Choose your wallet to begin.');
+$('simulate').addEventListener('click', async () => {
+  if (!execution) return;
+  const current = generation; busy = true; render(); status('Simulating the unchanged signed transaction and checking the current budget…');
+  try {
+    const prepared = await api('/api/simulate', { executionDigest: execution.digest });
+    if (!execution || current !== generation) throw new Error('WALLET_CHANGED');
+    execution.ticket = prepared;
+    const change = prepared.budget.conservativeNetProceedsLamports === undefined
+      ? `Simulated total debit: ${prepared.budget.totalDebitLamports} lamports`
+      : `Simulated net proceeds: ${prepared.budget.conservativeNetProceedsLamports} lamports`;
+    const tokenChange = prepared.budget.inputDebitedRaw === undefined ? ''
+      : `\nSimulated input: ${prepared.budget.inputDebitedRaw} ${prepared.budget.inputUnit}\nSimulated output: ${prepared.budget.outputCreditedRaw} ${prepared.budget.outputUnit}`;
+    $('execution-summary').textContent += `\n${change}${tokenChange}\nFee: ${prepared.budget.feeLamports} lamports\nRemaining: ${prepared.budget.remainingLamports} lamports`;
+    status('Simulation passed. Check the transaction, then explicitly approve devnet submission.');
+  } catch (e) { execution = null; status(`Simulation unavailable: ${e.message}. Use saved-operation recovery before preparing again.`); }
+  finally { busy = false; render(); }
+});
+$('submit').addEventListener('click', async () => {
+  if (!execution?.ticket || !$('approve-send').checked) return;
+  const approved = execution; execution = null; $('approve-send').checked = false; busy = true; render();
+  status(`Submitting operation ${approved.id}. An RPC acknowledgement is not finalization.`);
+  try {
+    const result = await api('/api/submit', { executionDigest: approved.digest });
+    status(`RPC accepted operation ${result.id}. Check its original signature through recovery for finalization.`);
+  } catch (e) { status(`Submission outcome requires recovery: ${e.message}. Operation ${approved.id}. Do not create another transfer yet.`); }
+  finally { busy = false; render(); }
+});
+let recoveredMint;
+function clearRecoveredMint() {
+  recoveredMint = undefined;
+  $('use-created-mint').hidden = true;
+  $('recovery-result').textContent = '';
+}
+$('operations').addEventListener('change', clearRecoveredMint);
+$('use-created-mint').addEventListener('click', () => {
+  if (!recoveredMint || recoveredMint.operationId !== $('operations').value) return;
+  $('monitor-mint').value = recoveredMint.address;
+  $('monitor-mint').dispatchEvent(new Event('input', { bubbles: true }));
+  $('trade-signing-route').value = 'curve';
+  $('trade-signing-route').dispatchEvent(new Event('input', { bubbles: true }));
+  $('migration-result').textContent = '';
+  $('balance-result').textContent = 'Refresh balances for the selected mint.';
+  $('buy-result').textContent = '';
+  $('sell-result').textContent = '';
+  status(`Selected finalized mint ${recoveredMint.address}. Connect the buyer wallet before preparing a buy.`);
+  $('buy-heading').focus();
+});
+$('refresh-operations').addEventListener('click', async () => {
+  clearRecoveredMint();
+  busy = true; render();
+  try {
+    const result = await api('/api/operations', {}); $('operations').replaceChildren(new Option('Choose an operation', ''));
+    for (const item of result.operations) $('operations').add(new Option(`${item.action ?? 'operation'} · ${item.state} · ${item.mintAddress ?? item.id}`, item.id));
+    status('Choose an operation to check. Recovery never submits transactions.');
+  } catch (e) { status(`Operations unavailable: ${e.message}`); }
+  finally { busy = false; render(); }
+});
+$('recover').addEventListener('click', async () => {
+  clearRecoveredMint();
+  const selectedOperation = $('operations').value;
+  busy = true; render();
+  try {
+    const result = await api('/api/recover', { operationId: selectedOperation });
+    if ($('operations').value !== selectedOperation) return;
+    if (result.state === 'abandoned-before-submission' && execution?.id === result.id) { execution = null; $('execution-section').hidden = true; }
+    status(`Operation ${result.id}: ${result.state}. Automatic resubmission is disabled.`);
+    const { creation, balances, creationInspectionError, balanceInspectionError } = result;
+    const detail = { creation, balances, creationInspectionError, balanceInspectionError };
+    $('recovery-result').textContent = Object.values(detail).some(value => value !== undefined)
+      ? JSON.stringify(detail, null, 2) : '';
+    if (result.state === 'finalized' && result.creation?.creatorMatches &&
+        result.creation.curveComplete === false && result.creation.mintAddress) {
+      recoveredMint = { operationId: result.id, address: result.creation.mintAddress };
+      $('use-created-mint').hidden = false;
+    }
+  }
+  catch (e) { status(`Recovery unavailable: ${e.message}. Keep the original operation and try checking again later.`); }
+  finally { busy = false; render(); }
+});
+if (validSession) {
+  status('Choose your wallet to begin.');
+  api('/api/mode', {}).then(mode => {
+    executionEnabled = mode.executionEnabled;
+    $('recovery-section').hidden = !executionEnabled;
+    if (executionEnabled) {
+      $('intro').textContent = 'Devnet execution mode: connect, review, sign, simulate and explicitly submit. Use disposable test SOL only.';
+      $('footnote').textContent = 'Desktop wallet extensions. Execution supports native SOL funding and collection, and reviewed Pump creation, buys and sells.';
+    }
+  }).catch(error => status(`Session unavailable: ${error.message}. Browser origin: ${location.origin}.`));
+}
 render();
+
+if (validSession) attachLauncherPanel({ api, showExecution, connectedAddress: () => session.address, sign: (request, digest) => session.sign(request, digest) });
+
+if (validSession) renderWalletSlots = attachWatchlist({ api, connectedAddress: () => session.address });
