@@ -55,10 +55,10 @@ export async function startWalletServer({ port = 8787, journalRoot, publicOrigin
       // API authentication still requires the exact configured HTTPS Origin.
       if (publicOrigin !== undefined) allowedHosts.push('127.0.0.1:8787', 'localhost:8787');
       requireSafe(allowedHosts.includes(req.headers.host), 'INVALID_HOST');
-      requireSafe(!req.headers['sec-fetch-site'] || ['same-origin', 'none'].includes(req.headers['sec-fetch-site']), 'CROSS_ORIGIN_REQUEST');
       if (req.method === 'GET' && assets.has(req.url)) {
         const asset = assets.get(req.url); res.writeHead(200, { 'content-type': asset.mime + '; charset=utf-8' }); res.end(asset.bytes); return;
       }
+      requireSafe(!req.headers['sec-fetch-site'] || ['same-origin', 'none'].includes(req.headers['sec-fetch-site']), 'CROSS_ORIGIN_REQUEST');
       requireSafe(req.method === 'POST' && ['/api/launch-bundle-transaction', '/api/launch-bundle-verify', '/api/launch-bundle-simulate', '/api/create-review', '/api/create-simulate', '/api/review', '/api/collection-review', '/api/batch-funding-review', '/api/buy-signing-review', '/api/pumpswap-signing-review', '/api/sell-signing-review', '/api/cleanup-signing-review', '/api/verify', '/api/cancel', '/api/mode', '/api/simulate', '/api/submit', '/api/recover', '/api/operations', ...PANEL_ROUTES].includes(req.url), 'ROUTE_NOT_ALLOWED');
       const supplied = req.headers['x-launcher-session'];
       requireSafe(req.headers.origin === origin && typeof supplied === 'string' && /^[a-f0-9]{64}$/.test(supplied)

@@ -32,7 +32,10 @@ test('wallet server rejects DNS-rebinding hosts, cross-site requests and bad inp
     req.on('error', reject);
   });
   assert.equal(rebound, 400);
-  assert.equal((await fetch(server.origin, { headers: { 'sec-fetch-site': 'cross-site' } })).status, 400);
+  assert.equal((await fetch(server.origin, { headers: { 'sec-fetch-site': 'cross-site' } })).status, 200);
+  const crossSiteApi = await fetch(server.origin + '/api/cancel', { method: 'POST', headers: { origin: server.origin, 'content-type': 'application/json', 'sec-fetch-site': 'cross-site', 'x-launcher-session': new URLSearchParams(new URL(server.url).hash.slice(1)).get('session') }, body: '{}' });
+  assert.equal(crossSiteApi.status, 400);
+  assert.deepEqual(await crossSiteApi.json(), { error: 'CROSS_ORIGIN_REQUEST' });
   const token = new URLSearchParams(new URL(server.url).hash.slice(1)).get('session');
   for (const body of ['not-json', JSON.stringify({ payerAddress: 'invalid', destinationAddress: 'invalid', lamports: '1' })]) {
     const res = await fetch(server.origin + '/api/review', { method: 'POST', headers: { origin: server.origin, 'x-launcher-session': token, 'content-type': 'application/json' }, body });
